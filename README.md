@@ -4,5 +4,5 @@ Hello there! this is **Server Watcher** app! This app will help you manage your 
 
 - Made by nooby_greece and Veroutis2012
 
-### Made by:
+### contact us in:
 ## [Nooby Organization](https://discord.gg/tkgACaDMgj)
