@@ -383,21 +383,293 @@ player_count_lbl.pack(side="right")
 players_canvas = tk.Canvas(players_inner, bg=BG1, highlightthickness=0)
 players_canvas.pack(fill="both", expand=True, padx=10, pady=10)
 
+# ========== PROPERTIES TAB WITH INTERACTIVE CONTROLS ==========
 props_tab = tk.Frame(notebook, bg=BG0)
 notebook.add(props_tab, text="  PROPERTIES  ")
-props_hdr_row = tk.Frame(props_tab, bg=BG0)
-props_hdr_row.pack(fill="x", padx=16, pady=(12, 0))
-tk.Label(props_hdr_row, text="◈  SERVER.PROPERTIES", bg=BG0, fg=DIM,
-         font=("Consolas", 8, "bold")).pack(side="left")
-props_outer = tk.Frame(props_tab, bg=BORDER, bd=1)
-props_outer.pack(fill="both", expand=True, padx=16, pady=(6, 14))
-props_inner_frame = tk.Frame(props_outer, bg=BG1)
-props_inner_frame.pack(fill="both", expand=True, padx=1, pady=1)
-props_text = tk.Text(props_inner_frame, bg=BG1, fg=GREEN,
-                     insertbackground=CYAN, font=FONT_MONO,
-                     relief="flat", bd=0, padx=14, pady=10,
-                     selectbackground=BG4, spacing1=2)
-props_text.pack(fill="both", expand=True)
+
+props_header = tk.Frame(props_tab, bg=BG0)
+props_header.pack(fill="x", padx=16, pady=(12, 8))
+tk.Label(props_header, text="◈  SERVER CONFIGURATION", bg=BG0, fg=CYAN,
+         font=("Consolas", 10, "bold")).pack(side="left")
+tk.Label(props_header, text="edit settings and click SAVE", bg=BG0, fg=DIM,
+         font=FONT_TINY).pack(side="right")
+
+props_main = tk.Frame(props_tab, bg=BG0)
+props_main.pack(fill="both", expand=True, padx=16, pady=(0, 12))
+
+left_panel = tk.Frame(props_main, bg=BG0)
+left_panel.pack(side="left", fill="both", expand=True, padx=(0, 8))
+
+right_panel = tk.Frame(props_main, bg=BG0)
+right_panel.pack(side="right", fill="both", expand=True, padx=(8, 0))
+
+prop_vars = {}
+
+def make_prop_section(parent, title, color):
+    frame = tk.Frame(parent, bg=color, padx=1, pady=1)
+    inner = tk.Frame(frame, bg=BG1)
+    inner.pack(fill="both", expand=True, padx=1, pady=1)
+    
+    title_frame = tk.Frame(inner, bg=BG1)
+    title_frame.pack(fill="x", padx=12, pady=(8, 4))
+    dot = tk.Canvas(title_frame, width=6, height=6, bg=BG1, highlightthickness=0)
+    dot.create_oval(0, 0, 6, 6, fill=color, outline="")
+    dot.pack(side="left", padx=(0, 6))
+    tk.Label(title_frame, text=title, bg=BG1, fg=color,
+             font=("Consolas", 9, "bold")).pack(side="left")
+    
+    content = tk.Frame(inner, bg=BG1)
+    content.pack(fill="both", expand=True, padx=10, pady=(0, 8))
+    return content
+
+def make_prop_toggle(parent, label_text, default=False, key=None):
+    frame = tk.Frame(parent, bg=BG1, padx=1, pady=1)
+    inner = tk.Frame(frame, bg=BG2)
+    inner.pack(fill="both", expand=True, padx=1, pady=1)
+    
+    var = tk.BooleanVar(value=default)
+    if key:
+        prop_vars[key] = var
+    
+    lbl = tk.Label(inner, text=label_text, bg=BG2, fg=WHITE,
+                   font=FONT_SMALL, padx=12, pady=6)
+    lbl.pack(side="left")
+    
+    toggle_canvas = tk.Canvas(inner, width=40, height=20, bg=BG2, highlightthickness=0)
+    toggle_canvas.pack(side="right", padx=8)
+    
+    def update():
+        toggle_canvas.delete("all")
+        if var.get():
+            toggle_canvas.create_rectangle(0, 0, 40, 20, fill=GREEN, outline="")
+            toggle_canvas.create_oval(22, 2, 38, 18, fill=WHITE, outline="")
+        else:
+            toggle_canvas.create_rectangle(0, 0, 40, 20, fill=DIM, outline="")
+            toggle_canvas.create_oval(2, 2, 18, 18, fill=WHITE, outline="")
+    
+    def click(e):
+        var.set(not var.get())
+        update()
+    
+    toggle_canvas.bind("<Button-1>", click)
+    lbl.bind("<Button-1>", click)
+    update()
+    return frame
+
+def make_prop_dropdown(parent, label_text, options, default_index=0, key=None):
+    frame = tk.Frame(parent, bg=BG1, padx=1, pady=1)
+    inner = tk.Frame(frame, bg=BG2)
+    inner.pack(fill="both", expand=True, padx=1, pady=1)
+    
+    lbl = tk.Label(inner, text=label_text, bg=BG2, fg=WHITE,
+                   font=FONT_SMALL, padx=12, pady=6)
+    lbl.pack(side="left")
+    
+    var = tk.StringVar(value=options[default_index])
+    if key:
+        prop_vars[key] = var
+    
+    dd = ttk.Combobox(inner, textvariable=var, values=options, state="readonly",
+                       font=FONT_SMALL, width=12)
+    dd.pack(side="right", padx=8)
+    dd.configure(background=BG3, foreground=WHITE, fieldbackground=BG3)
+    return frame
+
+def make_prop_number(parent, label_text, default=20, min_val=1, max_val=100, key=None):
+    frame = tk.Frame(parent, bg=BG1, padx=1, pady=1)
+    inner = tk.Frame(frame, bg=BG2)
+    inner.pack(fill="both", expand=True, padx=1, pady=1)
+    
+    lbl = tk.Label(inner, text=label_text, bg=BG2, fg=WHITE,
+                   font=FONT_SMALL, padx=12, pady=6)
+    lbl.pack(side="left")
+    
+    var = tk.IntVar(value=default)
+    if key:
+        prop_vars[key] = var
+    
+    spin = tk.Spinbox(inner, from_=min_val, to=max_val, textvariable=var,
+                       bg=BG3, fg=WHITE, font=FONT_SMALL, width=6,
+                       buttonbackground=BG4, relief="flat", bd=0)
+    spin.pack(side="right", padx=8)
+    return frame
+
+# LEFT PANEL
+left_section1 = make_prop_section(left_panel, "PLAYER SETTINGS", CYAN)
+make_prop_number(left_section1, "Max Players", default=20, min_val=1, max_max=100, key="max-players").pack(fill="x", pady=2)
+make_prop_toggle(left_section1, "Whitelist", default=False, key="white-list").pack(fill="x", pady=2)
+
+whitelist_frame = tk.Frame(left_section1, bg=BG1, padx=1, pady=1)
+whitelist_inner = tk.Frame(whitelist_frame, bg=BG2)
+whitelist_inner.pack(fill="both", expand=True, padx=1, pady=1)
+
+whitelist_label = tk.Label(whitelist_inner, text="Whitelist Players", bg=BG2, fg=DIM, font=FONT_TINY)
+whitelist_label.pack(pady=(4, 2))
+
+whitelist_entry_frame = tk.Frame(whitelist_inner, bg=BG2)
+whitelist_entry_frame.pack(fill="x", padx=8, pady=2)
+
+whitelist_entry = tk.Entry(whitelist_entry_frame, bg=BG3, fg=WHITE, font=FONT_TINY, insertbackground=CYAN)
+whitelist_entry.pack(side="left", fill="x", expand=True, padx=(0, 4))
+
+def add_whitelist():
+    name = whitelist_entry.get().strip()
+    if name:
+        whitelist_listbox.insert(tk.END, name)
+        whitelist_entry.delete(0, tk.END)
+
+def remove_whitelist():
+    sel = whitelist_listbox.curselection()
+    if sel:
+        whitelist_listbox.delete(sel[0])
+
+add_btn = tk.Button(whitelist_entry_frame, text="+", bg=BG3, fg=GREEN, font=FONT_BIG,
+                     command=add_whitelist, relief="flat", bd=0, padx=8)
+add_btn.pack(side="left", padx=(0, 2))
+remove_btn = tk.Button(whitelist_entry_frame, text="-", bg=BG3, fg=RED, font=FONT_BIG,
+                        command=remove_whitelist, relief="flat", bd=0, padx=8)
+remove_btn.pack(side="left")
+
+whitelist_listbox = tk.Listbox(whitelist_inner, bg=BG3, fg=WHITE, font=FONT_TINY,
+                                height=4, selectbackground=BG4, selectforeground=CYAN)
+whitelist_listbox.pack(fill="x", padx=8, pady=(2, 4))
+
+def toggle_whitelist_ui(*args):
+    if prop_vars.get("white-list", tk.BooleanVar()).get():
+        whitelist_frame.pack(fill="x", pady=2)
+    else:
+        whitelist_frame.pack_forget()
+
+prop_vars["white-list"].trace_add("write", toggle_whitelist_ui)
+toggle_whitelist_ui()
+
+make_prop_dropdown(left_section1, "Gamemode", ["survival", "creative", "adventure", "spectator"], 
+                   default_index=0, key="gamemode").pack(fill="x", pady=2)
+make_prop_toggle(left_section1, "Force Gamemode", default=False, key="force-gamemode").pack(fill="x", pady=2)
+
+left_section2 = make_prop_section(left_panel, "WORLD SETTINGS", GREEN)
+make_prop_toggle(left_section2, "Command Blocks", default=True, key="enable-command-block").pack(fill="x", pady=2)
+make_prop_toggle(left_section2, "Spawn Monsters", default=True, key="spawn-monsters").pack(fill="x", pady=2)
+make_prop_toggle(left_section2, "Spawn Animals", default=True, key="spawn-animals").pack(fill="x", pady=2)
+make_prop_toggle(left_section2, "Spawn Villagers (NPCs)", default=True, key="spawn-npcs").pack(fill="x", pady=2)
+make_prop_toggle(left_section2, "Allow Nether", default=True, key="allow-nether").pack(fill="x", pady=2)
+
+# RIGHT PANEL
+right_section1 = make_prop_section(right_panel, "GAMEPLAY SETTINGS", VIOLET)
+make_prop_dropdown(right_section1, "Difficulty", ["peaceful", "easy", "normal", "hard"],
+                   default_index=1, key="difficulty").pack(fill="x", pady=2)
+make_prop_toggle(right_section1, "PvP", default=True, key="pvp").pack(fill="x", pady=2)
+make_prop_toggle(right_section1, "Allow Flight", default=True, key="allow-flight").pack(fill="x", pady=2)
+make_prop_number(right_section1, "Spawn Protection (blocks)", default=0, min_val=0, max_val=64, key="spawn-protection").pack(fill="x", pady=2)
+
+right_section2 = make_prop_section(right_panel, "SECURITY & NETWORK", ORANGE)
+make_prop_toggle(right_section2, "Cracked Mode (Online-Mode = False)", default=False, key="online-mode").pack(fill="x", pady=2)
+
+right_section3 = make_prop_section(right_panel, "RESOURCE PACK", YELLOW)
+make_prop_toggle(right_section3, "Require Resource Pack", default=False, key="require-resource-pack").pack(fill="x", pady=2)
+
+button_row = tk.Frame(props_tab, bg=BG0)
+button_row.pack(fill="x", padx=16, pady=(0, 16))
+
+def save_properties():
+    if not server_path:
+        log("[ERROR] No server loaded\n")
+        return
+    
+    prop_file = os.path.join(server_path, "server.properties")
+    if not os.path.exists(prop_file):
+        log("[ERROR] server.properties not found\n")
+        return
+    
+    properties = {}
+    with open(prop_file, "r") as f:
+        for line in f:
+            if "=" in line and not line.startswith("#"):
+                key, val = line.strip().split("=", 1)
+                properties[key] = val
+    
+    for key, var in prop_vars.items():
+        if isinstance(var, tk.BooleanVar):
+            properties[key] = str(var.get()).lower()
+        elif isinstance(var, tk.StringVar):
+            properties[key] = var.get()
+        elif isinstance(var, tk.IntVar):
+            properties[key] = str(var.get())
+    
+    if prop_vars.get("online-mode", tk.BooleanVar()).get() == False:
+        properties["online-mode"] = "false"
+    else:
+        properties["online-mode"] = "true"
+    
+    whitelist_players = []
+    for i in range(whitelist_listbox.size()):
+        whitelist_players.append(whitelist_listbox.get(i))
+    
+    if whitelist_players:
+        properties["white-list"] = "true"
+        whitelist_file = os.path.join(server_path, "whitelist.json")
+        import json
+        whitelist_data = [{"uuid": "", "name": name} for name in whitelist_players]
+        with open(whitelist_file, "w") as f:
+            json.dump(whitelist_data, f, indent=2)
+    
+    with open(prop_file, "w") as f:
+        for key, val in properties.items():
+            f.write(f"{key}={val}\n")
+    
+    log("[INFO] Server properties saved\n")
+
+def load_properties():
+    if not server_path:
+        return
+    
+    prop_file = os.path.join(server_path, "server.properties")
+    if not os.path.exists(prop_file):
+        return
+    
+    properties = {}
+    with open(prop_file, "r") as f:
+        for line in f:
+            if "=" in line and not line.startswith("#"):
+                key, val = line.strip().split("=", 1)
+                properties[key] = val
+    
+    for key, var in prop_vars.items():
+        if key in properties:
+            val = properties[key]
+            if isinstance(var, tk.BooleanVar):
+                var.set(val.lower() == "true")
+            elif isinstance(var, tk.StringVar):
+                var.set(val)
+            elif isinstance(var, tk.IntVar):
+                try:
+                    var.set(int(val))
+                except:
+                    pass
+    
+    if prop_vars.get("white-list", tk.BooleanVar()).get():
+        whitelist_file = os.path.join(server_path, "whitelist.json")
+        if os.path.exists(whitelist_file):
+            import json
+            try:
+                with open(whitelist_file, "r") as f:
+                    data = json.load(f)
+                    for entry in data:
+                        if "name" in entry:
+                            whitelist_listbox.insert(tk.END, entry["name"])
+            except:
+                pass
+
+save_btn_frame, save_btn_lbl = make_btn(button_row, "💾  SAVE CHANGES", GREEN, command=save_properties)
+save_btn_frame.pack(side="left", padx=(0, 10))
+
+load_btn_frame, load_btn_lbl = make_btn(button_row, "⟳  LOAD", CYAN, command=load_properties)
+load_btn_frame.pack(side="left")
+
+reset_btn_frame, reset_btn_lbl = make_btn(button_row, "↺  RESET TO DEFAULTS", DIM)
+reset_btn_frame.pack(side="right")
+
+# ========== END PROPERTIES TAB ==========
 
 statusbar = tk.Frame(root, bg=BG1, height=26)
 statusbar.place(x=0, relwidth=1, rely=1.0, y=-26, height=26)
@@ -505,13 +777,7 @@ def import_server():
     bat_file = bats[0] if bats else None
     log(f"[INFO] Imported: {folder}\n")
     path_lbl.config(text=f"  {folder}")
-    props_text.delete("1.0", tk.END)
-    prop_file = os.path.join(folder, "server.properties")
-    if os.path.exists(prop_file):
-        with open(prop_file, "r") as f:
-            props_text.insert(tk.END, f.read())
-    else:
-        props_text.insert(tk.END, "# server.properties not found")
+    load_properties()
 
 def read_output():
     global players
