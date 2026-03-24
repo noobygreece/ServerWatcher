@@ -204,32 +204,44 @@ sidebar.pack_propagate(False)
 
 sidebar_header = tk.Frame(sidebar, bg=BG1)
 sidebar_header.pack(fill="x", padx=12, pady=(12, 6))
-tk.Label(sidebar_header, text="FILE TREE", bg=BG1, fg=DIM, font=("Consolas", 8, "bold")).pack(side="left")
-
-tk.Frame(sidebar, bg=CYAN, height=1).pack(fill="x", padx=12, pady=(0, 6))
+tk.Label(sidebar_header, text="FILE TREE", bg=BG1, fg=CYAN, font=("Consolas", 9, "bold")).pack(side="left")
+tk.Frame(sidebar, bg=CYAN, height=1).pack(fill="x", padx=12, pady=(0, 8))
 
 style = ttk.Style()
 style.theme_use("clam")
 style.configure("SW.Treeview",
-    background=BG2, foreground=DIM, fieldbackground=BG2,
-    borderwidth=0, font=("Consolas", 9), rowheight=24)
+    background=BG2,
+    foreground="#b8d8ff",
+    fieldbackground=BG2,
+    borderwidth=0,
+    font=("Consolas", 10),
+    rowheight=26)
 style.configure("SW.Treeview.Heading",
-    background=BG3, foreground=DIM, font=("Consolas", 9, "bold"))
+    background=BG3,
+    foreground=CYAN,
+    font=("Consolas", 9, "bold"))
 style.map("SW.Treeview",
     background=[("selected", BG4)],
     foreground=[("selected", CYAN)])
 
-tree_wrap = tk.Frame(sidebar, bg=BG2)
+tree_wrap = tk.Frame(sidebar, bg=BG3, padx=1, pady=1)
 tree_wrap.pack(fill="both", expand=True, padx=8, pady=(0, 8))
 
-tree_scroll = tk.Scrollbar(tree_wrap, bg=BG2, troughcolor=BG2,
-                            activebackground=BORDER, width=5, bd=0)
+tree_inner = tk.Frame(tree_wrap, bg=BG2)
+tree_inner.pack(fill="both", expand=True, padx=1, pady=1)
+
+tree_scroll = tk.Scrollbar(tree_inner, bg=BG3, troughcolor=BG2,
+                            activebackground=CYAN, width=6, bd=0)
 tree_scroll.pack(side="right", fill="y")
 
-tree = ttk.Treeview(tree_wrap, style="SW.Treeview",
+tree = ttk.Treeview(tree_inner, style="SW.Treeview",
                     yscrollcommand=tree_scroll.set, show="tree")
 tree.pack(fill="both", expand=True)
 tree_scroll.config(command=tree.yview)
+
+tree.tag_configure("folder", foreground=GREEN, font=("Consolas", 10, "normal"))
+tree.tag_configure("file", foreground="#b8d8ff", font=("Consolas", 10))
+tree.tag_configure("executable", foreground=CYAN, font=("Consolas", 10))
 
 tk.Frame(body, bg=BORDER, width=1).pack(side="left", fill="y")
 
@@ -465,9 +477,18 @@ def insert_tree_nodes(parent, path):
     try:
         for item in sorted(os.listdir(path)):
             full = os.path.join(path, item)
-            icon = "▸ " if os.path.isdir(full) else "  "
-            node = tree.insert(parent, "end", text=icon + item)
-            if os.path.isdir(full):
+            is_dir = os.path.isdir(full)
+            if is_dir:
+                icon = "▸ "
+                tag = "folder"
+            elif item.endswith((".jar", ".bat", ".exe", ".sh")):
+                icon = "⚡ "
+                tag = "executable"
+            else:
+                icon = "   "
+                tag = "file"
+            node = tree.insert(parent, "end", text=icon + item, tags=(tag,))
+            if is_dir:
                 insert_tree_nodes(node, full)
     except:
         pass
