@@ -378,349 +378,258 @@ props_hdr_row = tk.Frame(props_tab, bg=BG0)
 props_hdr_row.pack(fill="x", padx=16, pady=(12, 6))
 tk.Label(props_hdr_row, text="◈  SERVER.PROPERTIES", bg=BG0, fg=DIM,
          font=("Consolas", 8, "bold")).pack(side="left")
-
 props_save_btn_f, props_save_btn_l = make_btn(props_hdr_row, "SAVE TO FILE", CYAN)
 props_save_btn_f.pack(side="right")
 
-props_canvas_outer = tk.Frame(props_tab, bg=BORDER, bd=1)
-props_canvas_outer.pack(fill="both", expand=True, padx=16, pady=(0, 14))
-props_canvas_inner = tk.Frame(props_canvas_outer, bg=BG1)
-props_canvas_inner.pack(fill="both", expand=True, padx=1, pady=1)
+props_border = tk.Frame(props_tab, bg=BORDER, bd=1)
+props_border.pack(fill="both", expand=True, padx=16, pady=(0, 14))
+props_bg = tk.Frame(props_border, bg=BG1)
+props_bg.pack(fill="both", expand=True, padx=1, pady=1)
 
-props_scroll_canvas = tk.Canvas(props_canvas_inner, bg=BG1, highlightthickness=0)
-props_scrollbar = tk.Scrollbar(props_canvas_inner, orient="vertical",
-                                command=props_scroll_canvas.yview,
-                                bg=BG1, troughcolor=BG1, activebackground=BORDER,
-                                width=6, bd=0)
-props_scrollbar.pack(side="right", fill="y")
-props_scroll_canvas.pack(side="left", fill="both", expand=True)
-props_scroll_canvas.configure(yscrollcommand=props_scrollbar.set)
+props_sc = tk.Canvas(props_bg, bg=BG1, highlightthickness=0)
+props_sb = tk.Scrollbar(props_bg, orient="vertical", command=props_sc.yview,
+                         bg=BG2, troughcolor=BG1, activebackground=BORDER, width=6, bd=0)
+props_sb.pack(side="right", fill="y")
+props_sc.pack(side="left", fill="both", expand=True)
+props_sc.configure(yscrollcommand=props_sb.set)
 
-props_container = tk.Frame(props_scroll_canvas, bg=BG1)
-props_scroll_canvas.create_window((0, 0), window=props_container, anchor="nw")
+pc = tk.Frame(props_sc, bg=BG1)
+_pcwin = props_sc.create_window((0, 0), window=pc, anchor="nw")
 
-def _props_on_configure(e):
-    props_scroll_canvas.configure(scrollregion=props_scroll_canvas.bbox("all"))
-    props_scroll_canvas.itemconfig(1, width=props_scroll_canvas.winfo_width())
+def _pc_resize(e=None):
+    props_sc.configure(scrollregion=props_sc.bbox("all"))
+    props_sc.itemconfig(_pcwin, width=props_sc.winfo_width())
 
-props_container.bind("<Configure>", _props_on_configure)
-props_scroll_canvas.bind("<Configure>", _props_on_configure)
+pc.bind("<Configure>", _pc_resize)
+props_sc.bind("<Configure>", _pc_resize)
 
-def _props_mousewheel(e):
-    props_scroll_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
-props_scroll_canvas.bind_all("<MouseWheel>", _props_mousewheel)
+def _mwheel(e):
+    props_sc.yview_scroll(int(-1 * (e.delta / 120)), "units")
 
-PROP_DEFAULTS = {
-    "max-players": "20",
-    "white-list": "false",
-    "enable-command-block": "true",
-    "spawn-monsters": "true",
-    "force-gamemode": "false",
-    "gamemode": "survival",
-    "online-mode": "false",
-    "allow-flight": "true",
-    "spawn-npcs": "true",
-    "spawn-protection": "0",
-    "difficulty": "easy",
-    "pvp": "true",
-    "spawn-animals": "true",
-    "allow-nether": "true",
-    "require-resource-pack": "false",
-}
+props_sc.bind("<MouseWheel>", _mwheel)
+pc.bind("<MouseWheel>", _mwheel)
 
 prop_vars = {}
+gm_btns   = {}
+diff_btns = {}
+gm_var    = tk.StringVar(value="survival")
+diff_var  = tk.StringVar(value="easy")
+prop_vars["gamemode"]   = gm_var
+prop_vars["difficulty"] = diff_var
+diff_colors = {"peaceful": GREEN, "easy": CYAN, "normal": YELLOW, "hard": RED}
 
-def make_prop_card(parent, label, key, card_color=BORDER):
-    card = tk.Frame(parent, bg=card_color, pady=1, padx=1)
-    inner = tk.Frame(card, bg=BG2)
-    inner.pack(fill="both", expand=True)
-    return card, inner
-
-def make_toggle(parent, key, default_on):
-    var = tk.BooleanVar(value=default_on)
-    prop_vars[key] = var
-
-    toggle_frame = tk.Frame(parent, bg=BG2)
-
-    indicator = tk.Canvas(toggle_frame, width=44, height=22, bg=BG2, highlightthickness=0)
-    indicator.pack(side="left", padx=(0, 10))
-
-    val_lbl = tk.Label(toggle_frame, text="ON" if default_on else "OFF",
-                       bg=BG2, fg=GREEN if default_on else DIM,
-                       font=("Consolas", 9, "bold"), width=4)
-    val_lbl.pack(side="left")
-
-    def draw_toggle(on):
-        indicator.delete("all")
-        track_color = BG4 if not on else BG3
-        indicator.create_rounded = None
-        indicator.create_rectangle(0, 4, 44, 18, fill=track_color, outline=GREEN if on else BORDER, width=1)
-        knob_x = 32 if on else 12
-        knob_color = GREEN if on else DIM
-        indicator.create_oval(knob_x - 8, 3, knob_x + 8, 19, fill=knob_color, outline="")
-
-    def toggle(_e=None):
-        new_val = not var.get()
-        var.set(new_val)
-        draw_toggle(new_val)
-        val_lbl.config(text="ON" if new_val else "OFF",
-                       fg=GREEN if new_val else DIM)
-        if key == "white-list":
-            if new_val:
-                whitelist_expander.pack(fill="x", padx=16, pady=(0, 4))
-            else:
-                whitelist_expander.pack_forget()
-
-    draw_toggle(default_on)
-    for w in (indicator, val_lbl, toggle_frame):
-        w.bind("<Button-1>", toggle)
-        w.config(cursor="hand2")
-
-    return toggle_frame
-
-def make_section_header(parent, text):
-    f = tk.Frame(parent, bg=BG1)
-    f.pack(fill="x", padx=16, pady=(18, 6))
+def _sec(text):
+    f = tk.Frame(pc, bg=BG1)
+    f.pack(fill="x", padx=16, pady=(20, 6))
     tk.Canvas(f, width=3, height=14, bg=CYAN, highlightthickness=0).pack(side="left", padx=(0, 8))
     tk.Label(f, text=text, bg=BG1, fg=CYAN, font=("Consolas", 8, "bold")).pack(side="left")
     tk.Frame(f, bg=BORDER, height=1).pack(side="left", fill="x", expand=True, padx=(12, 0))
 
-def make_row(parent, label_text, control_widget, key_hint=""):
-    row = tk.Frame(parent, bg=BG2)
-    row.pack(fill="x", padx=16, pady=3)
-    inner = tk.Frame(row, bg=BG2, padx=12, pady=10)
+def _row(label, hint):
+    r = tk.Frame(pc, bg=BG2)
+    r.pack(fill="x", padx=16, pady=2)
+    inner = tk.Frame(r, bg=BG2, padx=14, pady=11)
     inner.pack(fill="x")
-    lbl_col = tk.Frame(inner, bg=BG2)
-    lbl_col.pack(side="left", fill="x", expand=True)
-    tk.Label(lbl_col, text=label_text, bg=BG2, fg=WHITE,
-             font=("Consolas", 10, "bold")).pack(anchor="w")
-    if key_hint:
-        tk.Label(lbl_col, text=key_hint, bg=BG2, fg=DIMMER,
-                 font=("Consolas", 8)).pack(anchor="w")
-    control_widget.pack(side="right", padx=(0, 4))
-    control_widget.config(bg=BG2)
-    return row
-
-pc = props_container
-
-make_section_header(pc, "PLAYERS")
-
-max_players_var = tk.StringVar(value="20")
-prop_vars["max-players"] = max_players_var
-players_row = tk.Frame(pc, bg=BG2)
-players_row.pack(fill="x", padx=16, pady=3)
-players_inner = tk.Frame(players_row, bg=BG2, padx=12, pady=10)
-players_inner.pack(fill="x")
-pl_lbl_col = tk.Frame(players_inner, bg=BG2)
-pl_lbl_col.pack(side="left", fill="x", expand=True)
-tk.Label(pl_lbl_col, text="Players", bg=BG2, fg=WHITE, font=("Consolas", 10, "bold")).pack(anchor="w")
-tk.Label(pl_lbl_col, text="max-players", bg=BG2, fg=DIMMER, font=("Consolas", 8)).pack(anchor="w")
-pl_ctrl = tk.Frame(players_inner, bg=BG2)
-pl_ctrl.pack(side="right")
-tk.Button(pl_ctrl, text="−", bg=BG3, fg=WHITE, font=("Consolas", 11, "bold"),
-          relief="flat", bd=0, padx=10, pady=4, cursor="hand2",
-          activebackground=RED, activeforeground=WHITE,
-          command=lambda: max_players_var.set(str(max(1, int(max_players_var.get()) - 1)))).pack(side="left")
-tk.Label(pl_ctrl, textvariable=max_players_var, bg=BG2, fg=CYAN,
-         font=("Consolas", 13, "bold"), width=4).pack(side="left")
-tk.Button(pl_ctrl, text="+", bg=BG3, fg=WHITE, font=("Consolas", 11, "bold"),
-          relief="flat", bd=0, padx=10, pady=4, cursor="hand2",
-          activebackground=GREEN, activeforeground=BG0,
-          command=lambda: max_players_var.set(str(min(1000, int(max_players_var.get()) + 1)))).pack(side="left")
-
-wl_toggle = make_toggle(pc, "white-list", False)
-wl_row = tk.Frame(pc, bg=BG2)
-wl_row.pack(fill="x", padx=16, pady=3)
-wl_inner = tk.Frame(wl_row, bg=BG2, padx=12, pady=10)
-wl_inner.pack(fill="x")
-wl_lbl_col = tk.Frame(wl_inner, bg=BG2)
-wl_lbl_col.pack(side="left", fill="x", expand=True)
-tk.Label(wl_lbl_col, text="Whitelist", bg=BG2, fg=WHITE, font=("Consolas", 10, "bold")).pack(anchor="w")
-tk.Label(wl_lbl_col, text="white-list", bg=BG2, fg=DIMMER, font=("Consolas", 8)).pack(anchor="w")
-wl_toggle.pack(side="right", padx=(0, 4))
-
-whitelist_expander = tk.Frame(pc, bg=BG3, pady=1, padx=1)
-wl_exp_inner = tk.Frame(whitelist_expander, bg=BG2)
-wl_exp_inner.pack(fill="both", expand=True, padx=1, pady=1)
-tk.Label(wl_exp_inner, text="WHITELISTED PLAYERS", bg=BG2, fg=VIOLET,
-         font=("Consolas", 8, "bold")).pack(anchor="w", padx=14, pady=(10, 4))
-whitelist_players = []
-wl_list_frame = tk.Frame(wl_exp_inner, bg=BG2)
-wl_list_frame.pack(fill="x", padx=14, pady=(0, 6))
-wl_entry_row = tk.Frame(wl_exp_inner, bg=BG2)
-wl_entry_row.pack(fill="x", padx=14, pady=(0, 10))
-wl_entry = tk.Entry(wl_entry_row, bg=BG3, fg=WHITE, insertbackground=CYAN,
-                    font=FONT_MONO, relief="flat", bd=0)
-wl_entry.pack(side="left", fill="x", expand=True, ipady=6)
-
-def wl_add_player():
-    name = wl_entry.get().strip()
-    if not name or name in whitelist_players:
-        return
-    whitelist_players.append(name)
-    wl_entry.delete(0, tk.END)
-    p_row = tk.Frame(wl_list_frame, bg=BG3)
-    p_row.pack(fill="x", pady=2)
-    tk.Label(p_row, text=f"  {name}", bg=BG3, fg=CYAN, font=("Consolas", 9)).pack(side="left", padx=4, pady=4)
-    def remove():
-        whitelist_players.remove(name)
-        p_row.destroy()
-    tk.Button(p_row, text="✕", bg=BG3, fg=RED, font=("Consolas", 8),
-              relief="flat", bd=0, padx=6, cursor="hand2",
-              activebackground=BG3, activeforeground=RED,
-              command=remove).pack(side="right", padx=4)
-
-wl_add_btn_f, wl_add_btn_l = make_btn(wl_entry_row, "ADD", VIOLET)
-wl_add_btn_f.pack(side="left", padx=(6, 0))
-wl_add_btn_f.bind("<Button-1>", lambda e: wl_add_player())
-wl_add_btn_l.bind("<Button-1>", lambda e: wl_add_player())
-wl_entry.bind("<Return>", lambda e: wl_add_player())
-
-make_section_header(pc, "GAMEPLAY")
-
-for lbl, key, default_on, hint in [
-    ("Command Blocks", "enable-command-block", True,  "enable-command-block"),
-    ("Monsters",       "spawn-monsters",        True,  "spawn-monsters"),
-    ("Force Gamemode", "force-gamemode",         False, "force-gamemode"),
-]:
-    tog = make_toggle(pc, key, default_on)
-    row = tk.Frame(pc, bg=BG2)
-    row.pack(fill="x", padx=16, pady=3)
-    inn = tk.Frame(row, bg=BG2, padx=12, pady=10)
-    inn.pack(fill="x")
-    lc = tk.Frame(inn, bg=BG2)
+    lc = tk.Frame(inner, bg=BG2)
     lc.pack(side="left", fill="x", expand=True)
-    tk.Label(lc, text=lbl,  bg=BG2, fg=WHITE,  font=("Consolas", 10, "bold")).pack(anchor="w")
-    tk.Label(lc, text=hint, bg=BG2, fg=DIMMER, font=("Consolas", 8)).pack(anchor="w")
-    tog.pack(side="right", padx=(0, 4))
+    tk.Label(lc, text=label, bg=BG2, fg=WHITE,  font=("Consolas", 10, "bold")).pack(anchor="w")
+    tk.Label(lc, text=hint,  bg=BG2, fg=DIMMER, font=("Consolas", 8)).pack(anchor="w")
+    rc = tk.Frame(inner, bg=BG2)
+    rc.pack(side="right")
+    r.bind("<MouseWheel>", _mwheel)
+    inner.bind("<MouseWheel>", _mwheel)
+    lc.bind("<MouseWheel>", _mwheel)
+    return rc
 
-gm_var = tk.StringVar(value="survival")
-prop_vars["gamemode"] = gm_var
-gm_row = tk.Frame(pc, bg=BG2)
-gm_row.pack(fill="x", padx=16, pady=3)
-gm_inner = tk.Frame(gm_row, bg=BG2, padx=12, pady=10)
-gm_inner.pack(fill="x")
-gm_lbl_col = tk.Frame(gm_inner, bg=BG2)
-gm_lbl_col.pack(side="left", fill="x", expand=True)
-tk.Label(gm_lbl_col, text="Gamemode",   bg=BG2, fg=WHITE,  font=("Consolas", 10, "bold")).pack(anchor="w")
-tk.Label(gm_lbl_col, text="gamemode",   bg=BG2, fg=DIMMER, font=("Consolas", 8)).pack(anchor="w")
-gm_btn_row = tk.Frame(gm_inner, bg=BG2)
-gm_btn_row.pack(side="right")
-gm_btns = {}
+def _toggle(key, default_on, rc):
+    var = tk.BooleanVar(value=default_on)
+    prop_vars[key] = var
+    tf = tk.Frame(rc, bg=BG2)
+    tf.pack()
+    ind = tk.Canvas(tf, width=46, height=24, bg=BG2, highlightthickness=0)
+    ind.pack(side="left", padx=(0, 8))
+    vlbl = tk.Label(tf, text="ON" if default_on else "OFF",
+                    fg=GREEN if default_on else DIM,
+                    bg=BG2, font=("Consolas", 9, "bold"), width=3, anchor="w")
+    vlbl.pack(side="left")
+
+    def _draw(on):
+        ind.delete("all")
+        ind.create_rectangle(2, 6, 44, 18, fill=BG4 if not on else BG3,
+                             outline=GREEN if on else BORDER, width=1)
+        kx = 34 if on else 12
+        ind.create_oval(kx-7, 5, kx+7, 19, fill=GREEN if on else DIM, outline="")
+
+    def _click(_e=None):
+        v = not var.get()
+        var.set(v)
+        _draw(v)
+        vlbl.config(text="ON" if v else "OFF", fg=GREEN if v else DIM)
+        if key == "white-list":
+            if v:
+                wl_expander.pack(fill="x", padx=16, pady=(0, 4))
+            else:
+                wl_expander.pack_forget()
+
+    _draw(default_on)
+    for w in (ind, vlbl, tf):
+        w.bind("<Button-1>", _click)
+        w.config(cursor="hand2")
+        w.bind("<MouseWheel>", _mwheel)
+    return var
+
+def _stepper(key, default_val, rc, lo=0, hi=1000):
+    var = tk.StringVar(value=str(default_val))
+    prop_vars[key] = var
+    sf = tk.Frame(rc, bg=BG2)
+    sf.pack()
+    def _dec():
+        try: var.set(str(max(lo, int(var.get()) - 1)))
+        except: pass
+    def _inc():
+        try: var.set(str(min(hi, int(var.get()) + 1)))
+        except: pass
+    tk.Button(sf, text="−", bg=BG3, fg=WHITE, font=("Consolas", 11, "bold"),
+              relief="flat", bd=0, padx=12, pady=5, cursor="hand2",
+              activebackground=RED, activeforeground=WHITE,
+              command=_dec).pack(side="left")
+    tk.Label(sf, textvariable=var, bg=BG2, fg=CYAN,
+             font=("Consolas", 14, "bold"), width=4, anchor="center").pack(side="left")
+    tk.Button(sf, text="+", bg=BG3, fg=WHITE, font=("Consolas", 11, "bold"),
+              relief="flat", bd=0, padx=12, pady=5, cursor="hand2",
+              activebackground=GREEN, activeforeground=BG0,
+              command=_inc).pack(side="left")
+    sf.bind("<MouseWheel>", _mwheel)
 
 def set_gamemode(mode):
     gm_var.set(mode)
     for m, (bf, bl) in gm_btns.items():
-        if m == mode:
-            bf.config(bg=CYAN); bl.config(bg=CYAN, fg=BG0)
-        else:
-            bf.config(bg=BG3); bl.config(bg=BG3, fg=DIM)
-
-for mode in ["survival", "creative", "adventure", "spectator", "hardcore"]:
-    color = CYAN if mode == "survival" else BG3
-    fg    = BG0  if mode == "survival" else DIM
-    bf = tk.Frame(gm_btn_row, bg=color, pady=1, padx=1)
-    bf.pack(side="left", padx=(0, 4))
-    bl = tk.Label(bf, text=mode.upper()[:4], bg=color, fg=fg,
-                  font=("Consolas", 8, "bold"), padx=8, pady=5, cursor="hand2")
-    bl.pack()
-    gm_btns[mode] = (bf, bl)
-    bf.bind("<Button-1>", lambda e, m=mode: set_gamemode(m))
-    bl.bind("<Button-1>", lambda e, m=mode: set_gamemode(m))
-
-diff_var = tk.StringVar(value="easy")
-prop_vars["difficulty"] = diff_var
-diff_row = tk.Frame(pc, bg=BG2)
-diff_row.pack(fill="x", padx=16, pady=3)
-diff_inner = tk.Frame(diff_row, bg=BG2, padx=12, pady=10)
-diff_inner.pack(fill="x")
-diff_lbl_col = tk.Frame(diff_inner, bg=BG2)
-diff_lbl_col.pack(side="left", fill="x", expand=True)
-tk.Label(diff_lbl_col, text="Difficulty", bg=BG2, fg=WHITE,  font=("Consolas", 10, "bold")).pack(anchor="w")
-tk.Label(diff_lbl_col, text="difficulty", bg=BG2, fg=DIMMER, font=("Consolas", 8)).pack(anchor="w")
-diff_btn_row = tk.Frame(diff_inner, bg=BG2)
-diff_btn_row.pack(side="right")
-diff_btns = {}
-diff_colors = {"peaceful": GREEN, "easy": CYAN, "normal": YELLOW, "hard": RED}
+        active = m == mode
+        bf.config(bg=CYAN if active else BG3)
+        bl.config(bg=CYAN if active else BG3, fg=BG0 if active else DIM)
 
 def set_difficulty(d):
     diff_var.set(d)
     for dd, (bf, bl) in diff_btns.items():
         c = diff_colors[dd]
-        if dd == d:
-            bf.config(bg=c); bl.config(bg=c, fg=BG0)
-        else:
-            bf.config(bg=BG3); bl.config(bg=BG3, fg=DIM)
+        active = dd == d
+        bf.config(bg=c if active else BG3)
+        bl.config(bg=c if active else BG3, fg=BG0 if active else DIM)
 
+_sec("PLAYERS")
+
+rc = _row("Players", "max-players")
+_stepper("max-players", 20, rc, lo=1, hi=1000)
+
+rc = _row("Whitelist", "white-list")
+_toggle("white-list", False, rc)
+
+wl_expander = tk.Frame(pc, bg=BG3, pady=1, padx=1)
+wl_exp_bg = tk.Frame(wl_expander, bg=BG2)
+wl_exp_bg.pack(fill="both", expand=True, padx=1, pady=1)
+tk.Label(wl_exp_bg, text="WHITELISTED PLAYERS", bg=BG2, fg=VIOLET,
+         font=("Consolas", 8, "bold")).pack(anchor="w", padx=14, pady=(10, 4))
+whitelist_players = []
+wl_list_frame = tk.Frame(wl_exp_bg, bg=BG2)
+wl_list_frame.pack(fill="x", padx=14, pady=(0, 4))
+wl_add_row = tk.Frame(wl_exp_bg, bg=BG2)
+wl_add_row.pack(fill="x", padx=14, pady=(0, 10))
+wl_entry = tk.Entry(wl_add_row, bg=BG3, fg=WHITE, insertbackground=CYAN,
+                    font=FONT_MONO, relief="flat", bd=0)
+wl_entry.pack(side="left", fill="x", expand=True, ipady=6)
+
+def wl_add():
+    name = wl_entry.get().strip()
+    if not name or name in whitelist_players:
+        return
+    whitelist_players.append(name)
+    wl_entry.delete(0, tk.END)
+    pr = tk.Frame(wl_list_frame, bg=BG3)
+    pr.pack(fill="x", pady=2)
+    tk.Label(pr, text=f"  {name}", bg=BG3, fg=CYAN, font=("Consolas", 9)).pack(side="left", padx=4, pady=4)
+    def _rm():
+        whitelist_players.remove(name)
+        pr.destroy()
+    tk.Button(pr, text="✕", bg=BG3, fg=RED, font=("Consolas", 8), relief="flat", bd=0,
+              padx=6, cursor="hand2", activebackground=BG3, activeforeground=RED,
+              command=_rm).pack(side="right", padx=4)
+
+wl_add_bf, wl_add_bl = make_btn(wl_add_row, "ADD", VIOLET)
+wl_add_bf.pack(side="left", padx=(6, 0))
+wl_add_bf.bind("<Button-1>", lambda e: wl_add())
+wl_add_bl.bind("<Button-1>", lambda e: wl_add())
+wl_entry.bind("<Return>", lambda e: wl_add())
+
+_sec("GAMEPLAY")
+
+for lbl, key, defval, hint in [
+    ("Command Blocks", "enable-command-block", True,  "enable-command-block"),
+    ("Monsters",       "spawn-monsters",        True,  "spawn-monsters"),
+    ("Force Gamemode", "force-gamemode",         False, "force-gamemode"),
+]:
+    _toggle(key, defval, _row(lbl, hint))
+
+rc = _row("Gamemode", "gamemode")
+gm_bf_row = tk.Frame(rc, bg=BG2)
+gm_bf_row.pack()
+for mode in ["survival", "creative", "adventure", "spectator", "hardcore"]:
+    active = mode == "survival"
+    bf = tk.Frame(gm_bf_row, bg=CYAN if active else BG3, pady=1, padx=1)
+    bf.pack(side="left", padx=(0, 3))
+    bl = tk.Label(bf, text=mode.upper()[:4], bg=CYAN if active else BG3,
+                  fg=BG0 if active else DIM, font=("Consolas", 8, "bold"),
+                  padx=8, pady=5, cursor="hand2")
+    bl.pack()
+    gm_btns[mode] = (bf, bl)
+    bf.bind("<Button-1>", lambda e, m=mode: set_gamemode(m))
+    bl.bind("<Button-1>", lambda e, m=mode: set_gamemode(m))
+    bf.bind("<MouseWheel>", _mwheel)
+    bl.bind("<MouseWheel>", _mwheel)
+gm_bf_row.bind("<MouseWheel>", _mwheel)
+
+rc = _row("Difficulty", "difficulty")
+df_bf_row = tk.Frame(rc, bg=BG2)
+df_bf_row.pack()
 for diff in ["peaceful", "easy", "normal", "hard"]:
-    is_def = diff == "easy"
-    c  = diff_colors[diff] if is_def else BG3
-    fg = BG0 if is_def else DIM
-    bf = tk.Frame(diff_btn_row, bg=c, pady=1, padx=1)
-    bf.pack(side="left", padx=(0, 4))
-    bl = tk.Label(bf, text=diff.upper()[:4], bg=c, fg=fg,
-                  font=("Consolas", 8, "bold"), padx=8, pady=5, cursor="hand2")
+    active = diff == "easy"
+    c = diff_colors[diff]
+    bf = tk.Frame(df_bf_row, bg=c if active else BG3, pady=1, padx=1)
+    bf.pack(side="left", padx=(0, 3))
+    bl = tk.Label(bf, text=diff.upper()[:4], bg=c if active else BG3,
+                  fg=BG0 if active else DIM, font=("Consolas", 8, "bold"),
+                  padx=8, pady=5, cursor="hand2")
     bl.pack()
     diff_btns[diff] = (bf, bl)
     bf.bind("<Button-1>", lambda e, d=diff: set_difficulty(d))
     bl.bind("<Button-1>", lambda e, d=diff: set_difficulty(d))
+    bf.bind("<MouseWheel>", _mwheel)
+    bl.bind("<MouseWheel>", _mwheel)
+df_bf_row.bind("<MouseWheel>", _mwheel)
 
-sp_var = tk.StringVar(value="0")
-prop_vars["spawn-protection"] = sp_var
-sp_row = tk.Frame(pc, bg=BG2)
-sp_row.pack(fill="x", padx=16, pady=3)
-sp_inner = tk.Frame(sp_row, bg=BG2, padx=12, pady=10)
-sp_inner.pack(fill="x")
-sp_lbl_col = tk.Frame(sp_inner, bg=BG2)
-sp_lbl_col.pack(side="left", fill="x", expand=True)
-tk.Label(sp_lbl_col, text="Spawn Protection", bg=BG2, fg=WHITE,  font=("Consolas", 10, "bold")).pack(anchor="w")
-tk.Label(sp_lbl_col, text="spawn-protection", bg=BG2, fg=DIMMER, font=("Consolas", 8)).pack(anchor="w")
-sp_ctrl = tk.Frame(sp_inner, bg=BG2)
-sp_ctrl.pack(side="right")
-tk.Button(sp_ctrl, text="−", bg=BG3, fg=WHITE, font=("Consolas", 11, "bold"),
-          relief="flat", bd=0, padx=10, pady=4, cursor="hand2",
-          activebackground=RED, activeforeground=WHITE,
-          command=lambda: sp_var.set(str(max(0, int(sp_var.get()) - 1)))).pack(side="left")
-tk.Label(sp_ctrl, textvariable=sp_var, bg=BG2, fg=CYAN,
-         font=("Consolas", 13, "bold"), width=4).pack(side="left")
-tk.Button(sp_ctrl, text="+", bg=BG3, fg=WHITE, font=("Consolas", 11, "bold"),
-          relief="flat", bd=0, padx=10, pady=4, cursor="hand2",
-          activebackground=GREEN, activeforeground=BG0,
-          command=lambda: sp_var.set(str(int(sp_var.get()) + 1))).pack(side="left")
+rc = _row("Spawn Protection", "spawn-protection")
+_stepper("spawn-protection", 0, rc, lo=0, hi=999)
 
-make_section_header(pc, "WORLD & SERVER")
+_sec("WORLD & SERVER")
 
-for lbl, key, default_on, hint in [
-    ("Cracked (offline mode)", "online-mode",            False, "online-mode → false = cracked"),
-    ("Flight",                  "allow-flight",            True,  "allow-flight"),
-    ("Villagers",               "spawn-npcs",              True,  "spawn-npcs"),
-    ("PVP",                     "pvp",                     True,  "pvp"),
-    ("Animals",                 "spawn-animals",           True,  "spawn-animals"),
-    ("Nether",                  "allow-nether",            True,  "allow-nether"),
-    ("Resource Pack Required",  "require-resource-pack",   False, "require-resource-pack"),
+for lbl, key, defval, hint in [
+    ("Cracked (offline mode)", "online-mode",           False, "online-mode=false means cracked"),
+    ("Flight",                  "allow-flight",           True,  "allow-flight"),
+    ("Villagers",               "spawn-npcs",             True,  "spawn-npcs"),
+    ("PVP",                     "pvp",                    True,  "pvp"),
+    ("Animals",                 "spawn-animals",          True,  "spawn-animals"),
+    ("Nether",                  "allow-nether",           True,  "allow-nether"),
+    ("Resource Pack Required",  "require-resource-pack",  False, "require-resource-pack"),
 ]:
-    tog = make_toggle(pc, key, default_on)
-    row = tk.Frame(pc, bg=BG2)
-    row.pack(fill="x", padx=16, pady=3)
-    inn = tk.Frame(row, bg=BG2, padx=12, pady=10)
-    inn.pack(fill="x")
-    lc = tk.Frame(inn, bg=BG2)
-    lc.pack(side="left", fill="x", expand=True)
-    tk.Label(lc, text=lbl,  bg=BG2, fg=WHITE,  font=("Consolas", 10, "bold")).pack(anchor="w")
-    tk.Label(lc, text=hint, bg=BG2, fg=DIMMER, font=("Consolas", 8)).pack(anchor="w")
-    tog.pack(side="right", padx=(0, 4))
+    _toggle(key, defval, _row(lbl, hint))
 
-tk.Frame(pc, bg=BG1, height=20).pack()
+tk.Frame(pc, bg=BG1, height=24).pack()
 
 def get_props_dict():
     d = {}
     for key, var in prop_vars.items():
         if isinstance(var, tk.BooleanVar):
-            raw = var.get()
-            if key == "online-mode":
-                d[key] = "false" if raw else "true"
-            else:
-                d[key] = "true" if raw else "false"
+            v = var.get()
+            d[key] = ("false" if v else "true") if key == "online-mode" else ("true" if v else "false")
         else:
             d[key] = var.get()
     return d
@@ -759,16 +668,11 @@ def load_props_from_file(prop_file):
             continue
         val = mapping[key]
         if isinstance(var, tk.BooleanVar):
-            if key == "online-mode":
-                var.set(val == "false")
-            else:
-                var.set(val == "true")
+            var.set((val == "false") if key == "online-mode" else (val == "true"))
         else:
             var.set(val)
-    if "gamemode" in mapping:
-        set_gamemode(mapping["gamemode"])
-    if "difficulty" in mapping:
-        set_difficulty(mapping["difficulty"])
+    if "gamemode"   in mapping: set_gamemode(mapping["gamemode"])
+    if "difficulty" in mapping: set_difficulty(mapping["difficulty"])
 
 props_save_btn_f.bind("<Button-1>", lambda e: save_props_to_file())
 props_save_btn_l.bind("<Button-1>", lambda e: save_props_to_file())
