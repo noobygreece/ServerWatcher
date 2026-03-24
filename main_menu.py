@@ -204,44 +204,32 @@ sidebar.pack_propagate(False)
 
 sidebar_header = tk.Frame(sidebar, bg=BG1)
 sidebar_header.pack(fill="x", padx=12, pady=(12, 6))
-tk.Label(sidebar_header, text="FILE TREE", bg=BG1, fg=CYAN, font=("Consolas", 9, "bold")).pack(side="left")
-tk.Frame(sidebar, bg=CYAN, height=1).pack(fill="x", padx=12, pady=(0, 8))
+tk.Label(sidebar_header, text="FILE TREE", bg=BG1, fg=DIM, font=("Consolas", 8, "bold")).pack(side="left")
+
+tk.Frame(sidebar, bg=CYAN, height=1).pack(fill="x", padx=12, pady=(0, 6))
 
 style = ttk.Style()
 style.theme_use("clam")
 style.configure("SW.Treeview",
-    background=BG2,
-    foreground="#b8d8ff",
-    fieldbackground=BG2,
-    borderwidth=0,
-    font=("Consolas", 10),
-    rowheight=26)
+    background=BG2, foreground=DIM, fieldbackground=BG2,
+    borderwidth=0, font=("Consolas", 9), rowheight=24)
 style.configure("SW.Treeview.Heading",
-    background=BG3,
-    foreground=CYAN,
-    font=("Consolas", 9, "bold"))
+    background=BG3, foreground=DIM, font=("Consolas", 9, "bold"))
 style.map("SW.Treeview",
     background=[("selected", BG4)],
     foreground=[("selected", CYAN)])
 
-tree_wrap = tk.Frame(sidebar, bg=BG3, padx=1, pady=1)
+tree_wrap = tk.Frame(sidebar, bg=BG2)
 tree_wrap.pack(fill="both", expand=True, padx=8, pady=(0, 8))
 
-tree_inner = tk.Frame(tree_wrap, bg=BG2)
-tree_inner.pack(fill="both", expand=True, padx=1, pady=1)
-
-tree_scroll = tk.Scrollbar(tree_inner, bg=BG3, troughcolor=BG2,
-                            activebackground=CYAN, width=6, bd=0)
+tree_scroll = tk.Scrollbar(tree_wrap, bg=BG2, troughcolor=BG2,
+                            activebackground=BORDER, width=5, bd=0)
 tree_scroll.pack(side="right", fill="y")
 
-tree = ttk.Treeview(tree_inner, style="SW.Treeview",
+tree = ttk.Treeview(tree_wrap, style="SW.Treeview",
                     yscrollcommand=tree_scroll.set, show="tree")
 tree.pack(fill="both", expand=True)
 tree_scroll.config(command=tree.yview)
-
-tree.tag_configure("folder", foreground=GREEN, font=("Consolas", 10, "normal"))
-tree.tag_configure("file", foreground="#b8d8ff", font=("Consolas", 10))
-tree.tag_configure("executable", foreground=CYAN, font=("Consolas", 10))
 
 tk.Frame(body, bg=BORDER, width=1).pack(side="left", fill="y")
 
@@ -383,293 +371,407 @@ player_count_lbl.pack(side="right")
 players_canvas = tk.Canvas(players_inner, bg=BG1, highlightthickness=0)
 players_canvas.pack(fill="both", expand=True, padx=10, pady=10)
 
-# ========== PROPERTIES TAB WITH INTERACTIVE CONTROLS ==========
 props_tab = tk.Frame(notebook, bg=BG0)
 notebook.add(props_tab, text="  PROPERTIES  ")
 
-props_header = tk.Frame(props_tab, bg=BG0)
-props_header.pack(fill="x", padx=16, pady=(12, 8))
-tk.Label(props_header, text="◈  SERVER CONFIGURATION", bg=BG0, fg=CYAN,
-         font=("Consolas", 10, "bold")).pack(side="left")
-tk.Label(props_header, text="edit settings and click SAVE", bg=BG0, fg=DIM,
-         font=FONT_TINY).pack(side="right")
+props_hdr_row = tk.Frame(props_tab, bg=BG0)
+props_hdr_row.pack(fill="x", padx=16, pady=(12, 6))
+tk.Label(props_hdr_row, text="◈  SERVER.PROPERTIES", bg=BG0, fg=DIM,
+         font=("Consolas", 8, "bold")).pack(side="left")
 
-props_main = tk.Frame(props_tab, bg=BG0)
-props_main.pack(fill="both", expand=True, padx=16, pady=(0, 12))
+props_save_btn_f, props_save_btn_l = make_btn(props_hdr_row, "SAVE TO FILE", CYAN)
+props_save_btn_f.pack(side="right")
 
-left_panel = tk.Frame(props_main, bg=BG0)
-left_panel.pack(side="left", fill="both", expand=True, padx=(0, 8))
+props_canvas_outer = tk.Frame(props_tab, bg=BORDER, bd=1)
+props_canvas_outer.pack(fill="both", expand=True, padx=16, pady=(0, 14))
+props_canvas_inner = tk.Frame(props_canvas_outer, bg=BG1)
+props_canvas_inner.pack(fill="both", expand=True, padx=1, pady=1)
 
-right_panel = tk.Frame(props_main, bg=BG0)
-right_panel.pack(side="right", fill="both", expand=True, padx=(8, 0))
+props_scroll_canvas = tk.Canvas(props_canvas_inner, bg=BG1, highlightthickness=0)
+props_scrollbar = tk.Scrollbar(props_canvas_inner, orient="vertical",
+                                command=props_scroll_canvas.yview,
+                                bg=BG1, troughcolor=BG1, activebackground=BORDER,
+                                width=6, bd=0)
+props_scrollbar.pack(side="right", fill="y")
+props_scroll_canvas.pack(side="left", fill="both", expand=True)
+props_scroll_canvas.configure(yscrollcommand=props_scrollbar.set)
+
+props_container = tk.Frame(props_scroll_canvas, bg=BG1)
+props_scroll_canvas.create_window((0, 0), window=props_container, anchor="nw")
+
+def _props_on_configure(e):
+    props_scroll_canvas.configure(scrollregion=props_scroll_canvas.bbox("all"))
+    props_scroll_canvas.itemconfig(1, width=props_scroll_canvas.winfo_width())
+
+props_container.bind("<Configure>", _props_on_configure)
+props_scroll_canvas.bind("<Configure>", _props_on_configure)
+
+def _props_mousewheel(e):
+    props_scroll_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
+props_scroll_canvas.bind_all("<MouseWheel>", _props_mousewheel)
+
+PROP_DEFAULTS = {
+    "max-players": "20",
+    "white-list": "false",
+    "enable-command-block": "true",
+    "spawn-monsters": "true",
+    "force-gamemode": "false",
+    "gamemode": "survival",
+    "online-mode": "false",
+    "allow-flight": "true",
+    "spawn-npcs": "true",
+    "spawn-protection": "0",
+    "difficulty": "easy",
+    "pvp": "true",
+    "spawn-animals": "true",
+    "allow-nether": "true",
+    "require-resource-pack": "false",
+}
 
 prop_vars = {}
 
-def make_prop_section(parent, title, color):
-    frame = tk.Frame(parent, bg=color, padx=1, pady=1)
-    inner = tk.Frame(frame, bg=BG1)
-    inner.pack(fill="both", expand=True, padx=1, pady=1)
-    
-    title_frame = tk.Frame(inner, bg=BG1)
-    title_frame.pack(fill="x", padx=12, pady=(8, 4))
-    dot = tk.Canvas(title_frame, width=6, height=6, bg=BG1, highlightthickness=0)
-    dot.create_oval(0, 0, 6, 6, fill=color, outline="")
-    dot.pack(side="left", padx=(0, 6))
-    tk.Label(title_frame, text=title, bg=BG1, fg=color,
-             font=("Consolas", 9, "bold")).pack(side="left")
-    
-    content = tk.Frame(inner, bg=BG1)
-    content.pack(fill="both", expand=True, padx=10, pady=(0, 8))
-    return content
+def make_prop_card(parent, label, key, card_color=BORDER):
+    card = tk.Frame(parent, bg=card_color, pady=1, padx=1)
+    inner = tk.Frame(card, bg=BG2)
+    inner.pack(fill="both", expand=True)
+    return card, inner
 
-def make_prop_toggle(parent, label_text, default=False, key=None):
-    frame = tk.Frame(parent, bg=BG1, padx=1, pady=1)
-    inner = tk.Frame(frame, bg=BG2)
-    inner.pack(fill="both", expand=True, padx=1, pady=1)
-    
-    var = tk.BooleanVar(value=default)
-    if key:
-        prop_vars[key] = var
-    
-    lbl = tk.Label(inner, text=label_text, bg=BG2, fg=WHITE,
-                   font=FONT_SMALL, padx=12, pady=6)
-    lbl.pack(side="left")
-    
-    toggle_canvas = tk.Canvas(inner, width=40, height=20, bg=BG2, highlightthickness=0)
-    toggle_canvas.pack(side="right", padx=8)
-    
-    def update():
-        toggle_canvas.delete("all")
-        if var.get():
-            toggle_canvas.create_rectangle(0, 0, 40, 20, fill=GREEN, outline="")
-            toggle_canvas.create_oval(22, 2, 38, 18, fill=WHITE, outline="")
+def make_toggle(parent, key, default_on):
+    var = tk.BooleanVar(value=default_on)
+    prop_vars[key] = var
+
+    toggle_frame = tk.Frame(parent, bg=BG2)
+
+    indicator = tk.Canvas(toggle_frame, width=44, height=22, bg=BG2, highlightthickness=0)
+    indicator.pack(side="left", padx=(0, 10))
+
+    val_lbl = tk.Label(toggle_frame, text="ON" if default_on else "OFF",
+                       bg=BG2, fg=GREEN if default_on else DIM,
+                       font=("Consolas", 9, "bold"), width=4)
+    val_lbl.pack(side="left")
+
+    def draw_toggle(on):
+        indicator.delete("all")
+        track_color = BG4 if not on else BG3
+        indicator.create_rounded = None
+        indicator.create_rectangle(0, 4, 44, 18, fill=track_color, outline=GREEN if on else BORDER, width=1)
+        knob_x = 32 if on else 12
+        knob_color = GREEN if on else DIM
+        indicator.create_oval(knob_x - 8, 3, knob_x + 8, 19, fill=knob_color, outline="")
+
+    def toggle(_e=None):
+        new_val = not var.get()
+        var.set(new_val)
+        draw_toggle(new_val)
+        val_lbl.config(text="ON" if new_val else "OFF",
+                       fg=GREEN if new_val else DIM)
+        if key == "white-list":
+            if new_val:
+                whitelist_expander.pack(fill="x", padx=16, pady=(0, 4))
+            else:
+                whitelist_expander.pack_forget()
+
+    draw_toggle(default_on)
+    for w in (indicator, val_lbl, toggle_frame):
+        w.bind("<Button-1>", toggle)
+        w.config(cursor="hand2")
+
+    return toggle_frame
+
+def make_section_header(parent, text):
+    f = tk.Frame(parent, bg=BG1)
+    f.pack(fill="x", padx=16, pady=(18, 6))
+    tk.Canvas(f, width=3, height=14, bg=CYAN, highlightthickness=0).pack(side="left", padx=(0, 8))
+    tk.Label(f, text=text, bg=BG1, fg=CYAN, font=("Consolas", 8, "bold")).pack(side="left")
+    tk.Frame(f, bg=BORDER, height=1).pack(side="left", fill="x", expand=True, padx=(12, 0))
+
+def make_row(parent, label_text, control_widget, key_hint=""):
+    row = tk.Frame(parent, bg=BG2)
+    row.pack(fill="x", padx=16, pady=3)
+    inner = tk.Frame(row, bg=BG2, padx=12, pady=10)
+    inner.pack(fill="x")
+    lbl_col = tk.Frame(inner, bg=BG2)
+    lbl_col.pack(side="left", fill="x", expand=True)
+    tk.Label(lbl_col, text=label_text, bg=BG2, fg=WHITE,
+             font=("Consolas", 10, "bold")).pack(anchor="w")
+    if key_hint:
+        tk.Label(lbl_col, text=key_hint, bg=BG2, fg=DIMMER,
+                 font=("Consolas", 8)).pack(anchor="w")
+    control_widget.pack(side="right", padx=(0, 4))
+    control_widget.config(bg=BG2)
+    return row
+
+pc = props_container
+
+make_section_header(pc, "PLAYERS")
+
+max_players_var = tk.StringVar(value="20")
+prop_vars["max-players"] = max_players_var
+players_row = tk.Frame(pc, bg=BG2)
+players_row.pack(fill="x", padx=16, pady=3)
+players_inner = tk.Frame(players_row, bg=BG2, padx=12, pady=10)
+players_inner.pack(fill="x")
+pl_lbl_col = tk.Frame(players_inner, bg=BG2)
+pl_lbl_col.pack(side="left", fill="x", expand=True)
+tk.Label(pl_lbl_col, text="Players", bg=BG2, fg=WHITE, font=("Consolas", 10, "bold")).pack(anchor="w")
+tk.Label(pl_lbl_col, text="max-players", bg=BG2, fg=DIMMER, font=("Consolas", 8)).pack(anchor="w")
+pl_ctrl = tk.Frame(players_inner, bg=BG2)
+pl_ctrl.pack(side="right")
+tk.Button(pl_ctrl, text="−", bg=BG3, fg=WHITE, font=("Consolas", 11, "bold"),
+          relief="flat", bd=0, padx=10, pady=4, cursor="hand2",
+          activebackground=RED, activeforeground=WHITE,
+          command=lambda: max_players_var.set(str(max(1, int(max_players_var.get()) - 1)))).pack(side="left")
+tk.Label(pl_ctrl, textvariable=max_players_var, bg=BG2, fg=CYAN,
+         font=("Consolas", 13, "bold"), width=4).pack(side="left")
+tk.Button(pl_ctrl, text="+", bg=BG3, fg=WHITE, font=("Consolas", 11, "bold"),
+          relief="flat", bd=0, padx=10, pady=4, cursor="hand2",
+          activebackground=GREEN, activeforeground=BG0,
+          command=lambda: max_players_var.set(str(min(1000, int(max_players_var.get()) + 1)))).pack(side="left")
+
+wl_toggle = make_toggle(pc, "white-list", False)
+wl_row = tk.Frame(pc, bg=BG2)
+wl_row.pack(fill="x", padx=16, pady=3)
+wl_inner = tk.Frame(wl_row, bg=BG2, padx=12, pady=10)
+wl_inner.pack(fill="x")
+wl_lbl_col = tk.Frame(wl_inner, bg=BG2)
+wl_lbl_col.pack(side="left", fill="x", expand=True)
+tk.Label(wl_lbl_col, text="Whitelist", bg=BG2, fg=WHITE, font=("Consolas", 10, "bold")).pack(anchor="w")
+tk.Label(wl_lbl_col, text="white-list", bg=BG2, fg=DIMMER, font=("Consolas", 8)).pack(anchor="w")
+wl_toggle.pack(side="right", padx=(0, 4))
+
+whitelist_expander = tk.Frame(pc, bg=BG3, pady=1, padx=1)
+wl_exp_inner = tk.Frame(whitelist_expander, bg=BG2)
+wl_exp_inner.pack(fill="both", expand=True, padx=1, pady=1)
+tk.Label(wl_exp_inner, text="WHITELISTED PLAYERS", bg=BG2, fg=VIOLET,
+         font=("Consolas", 8, "bold")).pack(anchor="w", padx=14, pady=(10, 4))
+whitelist_players = []
+wl_list_frame = tk.Frame(wl_exp_inner, bg=BG2)
+wl_list_frame.pack(fill="x", padx=14, pady=(0, 6))
+wl_entry_row = tk.Frame(wl_exp_inner, bg=BG2)
+wl_entry_row.pack(fill="x", padx=14, pady=(0, 10))
+wl_entry = tk.Entry(wl_entry_row, bg=BG3, fg=WHITE, insertbackground=CYAN,
+                    font=FONT_MONO, relief="flat", bd=0)
+wl_entry.pack(side="left", fill="x", expand=True, ipady=6)
+
+def wl_add_player():
+    name = wl_entry.get().strip()
+    if not name or name in whitelist_players:
+        return
+    whitelist_players.append(name)
+    wl_entry.delete(0, tk.END)
+    p_row = tk.Frame(wl_list_frame, bg=BG3)
+    p_row.pack(fill="x", pady=2)
+    tk.Label(p_row, text=f"  {name}", bg=BG3, fg=CYAN, font=("Consolas", 9)).pack(side="left", padx=4, pady=4)
+    def remove():
+        whitelist_players.remove(name)
+        p_row.destroy()
+    tk.Button(p_row, text="✕", bg=BG3, fg=RED, font=("Consolas", 8),
+              relief="flat", bd=0, padx=6, cursor="hand2",
+              activebackground=BG3, activeforeground=RED,
+              command=remove).pack(side="right", padx=4)
+
+wl_add_btn_f, wl_add_btn_l = make_btn(wl_entry_row, "ADD", VIOLET)
+wl_add_btn_f.pack(side="left", padx=(6, 0))
+wl_add_btn_f.bind("<Button-1>", lambda e: wl_add_player())
+wl_add_btn_l.bind("<Button-1>", lambda e: wl_add_player())
+wl_entry.bind("<Return>", lambda e: wl_add_player())
+
+make_section_header(pc, "GAMEPLAY")
+
+for lbl, key, default_on, hint in [
+    ("Command Blocks", "enable-command-block", True,  "enable-command-block"),
+    ("Monsters",       "spawn-monsters",        True,  "spawn-monsters"),
+    ("Force Gamemode", "force-gamemode",         False, "force-gamemode"),
+]:
+    tog = make_toggle(pc, key, default_on)
+    row = tk.Frame(pc, bg=BG2)
+    row.pack(fill="x", padx=16, pady=3)
+    inn = tk.Frame(row, bg=BG2, padx=12, pady=10)
+    inn.pack(fill="x")
+    lc = tk.Frame(inn, bg=BG2)
+    lc.pack(side="left", fill="x", expand=True)
+    tk.Label(lc, text=lbl,  bg=BG2, fg=WHITE,  font=("Consolas", 10, "bold")).pack(anchor="w")
+    tk.Label(lc, text=hint, bg=BG2, fg=DIMMER, font=("Consolas", 8)).pack(anchor="w")
+    tog.pack(side="right", padx=(0, 4))
+
+gm_var = tk.StringVar(value="survival")
+prop_vars["gamemode"] = gm_var
+gm_row = tk.Frame(pc, bg=BG2)
+gm_row.pack(fill="x", padx=16, pady=3)
+gm_inner = tk.Frame(gm_row, bg=BG2, padx=12, pady=10)
+gm_inner.pack(fill="x")
+gm_lbl_col = tk.Frame(gm_inner, bg=BG2)
+gm_lbl_col.pack(side="left", fill="x", expand=True)
+tk.Label(gm_lbl_col, text="Gamemode",   bg=BG2, fg=WHITE,  font=("Consolas", 10, "bold")).pack(anchor="w")
+tk.Label(gm_lbl_col, text="gamemode",   bg=BG2, fg=DIMMER, font=("Consolas", 8)).pack(anchor="w")
+gm_btn_row = tk.Frame(gm_inner, bg=BG2)
+gm_btn_row.pack(side="right")
+gm_btns = {}
+
+def set_gamemode(mode):
+    gm_var.set(mode)
+    for m, (bf, bl) in gm_btns.items():
+        if m == mode:
+            bf.config(bg=CYAN); bl.config(bg=CYAN, fg=BG0)
         else:
-            toggle_canvas.create_rectangle(0, 0, 40, 20, fill=DIM, outline="")
-            toggle_canvas.create_oval(2, 2, 18, 18, fill=WHITE, outline="")
-    
-    def click(e):
-        var.set(not var.get())
-        update()
-    
-    toggle_canvas.bind("<Button-1>", click)
-    lbl.bind("<Button-1>", click)
-    update()
-    return frame
+            bf.config(bg=BG3); bl.config(bg=BG3, fg=DIM)
 
-def make_prop_dropdown(parent, label_text, options, default_index=0, key=None):
-    frame = tk.Frame(parent, bg=BG1, padx=1, pady=1)
-    inner = tk.Frame(frame, bg=BG2)
-    inner.pack(fill="both", expand=True, padx=1, pady=1)
-    
-    lbl = tk.Label(inner, text=label_text, bg=BG2, fg=WHITE,
-                   font=FONT_SMALL, padx=12, pady=6)
-    lbl.pack(side="left")
-    
-    var = tk.StringVar(value=options[default_index])
-    if key:
-        prop_vars[key] = var
-    
-    dd = ttk.Combobox(inner, textvariable=var, values=options, state="readonly",
-                       font=FONT_SMALL, width=12)
-    dd.pack(side="right", padx=8)
-    dd.configure(background=BG3, foreground=WHITE, fieldbackground=BG3)
-    return frame
+for mode in ["survival", "creative", "adventure", "spectator", "hardcore"]:
+    color = CYAN if mode == "survival" else BG3
+    fg    = BG0  if mode == "survival" else DIM
+    bf = tk.Frame(gm_btn_row, bg=color, pady=1, padx=1)
+    bf.pack(side="left", padx=(0, 4))
+    bl = tk.Label(bf, text=mode.upper()[:4], bg=color, fg=fg,
+                  font=("Consolas", 8, "bold"), padx=8, pady=5, cursor="hand2")
+    bl.pack()
+    gm_btns[mode] = (bf, bl)
+    bf.bind("<Button-1>", lambda e, m=mode: set_gamemode(m))
+    bl.bind("<Button-1>", lambda e, m=mode: set_gamemode(m))
 
-def make_prop_number(parent, label_text, default=20, min_val=1, max_val=100, key=None):
-    frame = tk.Frame(parent, bg=BG1, padx=1, pady=1)
-    inner = tk.Frame(frame, bg=BG2)
-    inner.pack(fill="both", expand=True, padx=1, pady=1)
-    
-    lbl = tk.Label(inner, text=label_text, bg=BG2, fg=WHITE,
-                   font=FONT_SMALL, padx=12, pady=6)
-    lbl.pack(side="left")
-    
-    var = tk.IntVar(value=default)
-    if key:
-        prop_vars[key] = var
-    
-    spin = tk.Spinbox(inner, from_=min_val, to=max_val, textvariable=var,
-                       bg=BG3, fg=WHITE, font=FONT_SMALL, width=6,
-                       buttonbackground=BG4, relief="flat", bd=0)
-    spin.pack(side="right", padx=8)
-    return frame
+diff_var = tk.StringVar(value="easy")
+prop_vars["difficulty"] = diff_var
+diff_row = tk.Frame(pc, bg=BG2)
+diff_row.pack(fill="x", padx=16, pady=3)
+diff_inner = tk.Frame(diff_row, bg=BG2, padx=12, pady=10)
+diff_inner.pack(fill="x")
+diff_lbl_col = tk.Frame(diff_inner, bg=BG2)
+diff_lbl_col.pack(side="left", fill="x", expand=True)
+tk.Label(diff_lbl_col, text="Difficulty", bg=BG2, fg=WHITE,  font=("Consolas", 10, "bold")).pack(anchor="w")
+tk.Label(diff_lbl_col, text="difficulty", bg=BG2, fg=DIMMER, font=("Consolas", 8)).pack(anchor="w")
+diff_btn_row = tk.Frame(diff_inner, bg=BG2)
+diff_btn_row.pack(side="right")
+diff_btns = {}
+diff_colors = {"peaceful": GREEN, "easy": CYAN, "normal": YELLOW, "hard": RED}
 
-# LEFT PANEL
-left_section1 = make_prop_section(left_panel, "PLAYER SETTINGS", CYAN)
-make_prop_number(left_section1, "Max Players", default=20, min_val=1, max_max=100, key="max-players").pack(fill="x", pady=2)
-make_prop_toggle(left_section1, "Whitelist", default=False, key="white-list").pack(fill="x", pady=2)
+def set_difficulty(d):
+    diff_var.set(d)
+    for dd, (bf, bl) in diff_btns.items():
+        c = diff_colors[dd]
+        if dd == d:
+            bf.config(bg=c); bl.config(bg=c, fg=BG0)
+        else:
+            bf.config(bg=BG3); bl.config(bg=BG3, fg=DIM)
 
-whitelist_frame = tk.Frame(left_section1, bg=BG1, padx=1, pady=1)
-whitelist_inner = tk.Frame(whitelist_frame, bg=BG2)
-whitelist_inner.pack(fill="both", expand=True, padx=1, pady=1)
+for diff in ["peaceful", "easy", "normal", "hard"]:
+    is_def = diff == "easy"
+    c  = diff_colors[diff] if is_def else BG3
+    fg = BG0 if is_def else DIM
+    bf = tk.Frame(diff_btn_row, bg=c, pady=1, padx=1)
+    bf.pack(side="left", padx=(0, 4))
+    bl = tk.Label(bf, text=diff.upper()[:4], bg=c, fg=fg,
+                  font=("Consolas", 8, "bold"), padx=8, pady=5, cursor="hand2")
+    bl.pack()
+    diff_btns[diff] = (bf, bl)
+    bf.bind("<Button-1>", lambda e, d=diff: set_difficulty(d))
+    bl.bind("<Button-1>", lambda e, d=diff: set_difficulty(d))
 
-whitelist_label = tk.Label(whitelist_inner, text="Whitelist Players", bg=BG2, fg=DIM, font=FONT_TINY)
-whitelist_label.pack(pady=(4, 2))
+sp_var = tk.StringVar(value="0")
+prop_vars["spawn-protection"] = sp_var
+sp_row = tk.Frame(pc, bg=BG2)
+sp_row.pack(fill="x", padx=16, pady=3)
+sp_inner = tk.Frame(sp_row, bg=BG2, padx=12, pady=10)
+sp_inner.pack(fill="x")
+sp_lbl_col = tk.Frame(sp_inner, bg=BG2)
+sp_lbl_col.pack(side="left", fill="x", expand=True)
+tk.Label(sp_lbl_col, text="Spawn Protection", bg=BG2, fg=WHITE,  font=("Consolas", 10, "bold")).pack(anchor="w")
+tk.Label(sp_lbl_col, text="spawn-protection", bg=BG2, fg=DIMMER, font=("Consolas", 8)).pack(anchor="w")
+sp_ctrl = tk.Frame(sp_inner, bg=BG2)
+sp_ctrl.pack(side="right")
+tk.Button(sp_ctrl, text="−", bg=BG3, fg=WHITE, font=("Consolas", 11, "bold"),
+          relief="flat", bd=0, padx=10, pady=4, cursor="hand2",
+          activebackground=RED, activeforeground=WHITE,
+          command=lambda: sp_var.set(str(max(0, int(sp_var.get()) - 1)))).pack(side="left")
+tk.Label(sp_ctrl, textvariable=sp_var, bg=BG2, fg=CYAN,
+         font=("Consolas", 13, "bold"), width=4).pack(side="left")
+tk.Button(sp_ctrl, text="+", bg=BG3, fg=WHITE, font=("Consolas", 11, "bold"),
+          relief="flat", bd=0, padx=10, pady=4, cursor="hand2",
+          activebackground=GREEN, activeforeground=BG0,
+          command=lambda: sp_var.set(str(int(sp_var.get()) + 1))).pack(side="left")
 
-whitelist_entry_frame = tk.Frame(whitelist_inner, bg=BG2)
-whitelist_entry_frame.pack(fill="x", padx=8, pady=2)
+make_section_header(pc, "WORLD & SERVER")
 
-whitelist_entry = tk.Entry(whitelist_entry_frame, bg=BG3, fg=WHITE, font=FONT_TINY, insertbackground=CYAN)
-whitelist_entry.pack(side="left", fill="x", expand=True, padx=(0, 4))
+for lbl, key, default_on, hint in [
+    ("Cracked (offline mode)", "online-mode",            False, "online-mode → false = cracked"),
+    ("Flight",                  "allow-flight",            True,  "allow-flight"),
+    ("Villagers",               "spawn-npcs",              True,  "spawn-npcs"),
+    ("PVP",                     "pvp",                     True,  "pvp"),
+    ("Animals",                 "spawn-animals",           True,  "spawn-animals"),
+    ("Nether",                  "allow-nether",            True,  "allow-nether"),
+    ("Resource Pack Required",  "require-resource-pack",   False, "require-resource-pack"),
+]:
+    tog = make_toggle(pc, key, default_on)
+    row = tk.Frame(pc, bg=BG2)
+    row.pack(fill="x", padx=16, pady=3)
+    inn = tk.Frame(row, bg=BG2, padx=12, pady=10)
+    inn.pack(fill="x")
+    lc = tk.Frame(inn, bg=BG2)
+    lc.pack(side="left", fill="x", expand=True)
+    tk.Label(lc, text=lbl,  bg=BG2, fg=WHITE,  font=("Consolas", 10, "bold")).pack(anchor="w")
+    tk.Label(lc, text=hint, bg=BG2, fg=DIMMER, font=("Consolas", 8)).pack(anchor="w")
+    tog.pack(side="right", padx=(0, 4))
 
-def add_whitelist():
-    name = whitelist_entry.get().strip()
-    if name:
-        whitelist_listbox.insert(tk.END, name)
-        whitelist_entry.delete(0, tk.END)
+tk.Frame(pc, bg=BG1, height=20).pack()
 
-def remove_whitelist():
-    sel = whitelist_listbox.curselection()
-    if sel:
-        whitelist_listbox.delete(sel[0])
-
-add_btn = tk.Button(whitelist_entry_frame, text="+", bg=BG3, fg=GREEN, font=FONT_BIG,
-                     command=add_whitelist, relief="flat", bd=0, padx=8)
-add_btn.pack(side="left", padx=(0, 2))
-remove_btn = tk.Button(whitelist_entry_frame, text="-", bg=BG3, fg=RED, font=FONT_BIG,
-                        command=remove_whitelist, relief="flat", bd=0, padx=8)
-remove_btn.pack(side="left")
-
-whitelist_listbox = tk.Listbox(whitelist_inner, bg=BG3, fg=WHITE, font=FONT_TINY,
-                                height=4, selectbackground=BG4, selectforeground=CYAN)
-whitelist_listbox.pack(fill="x", padx=8, pady=(2, 4))
-
-def toggle_whitelist_ui(*args):
-    if prop_vars.get("white-list", tk.BooleanVar()).get():
-        whitelist_frame.pack(fill="x", pady=2)
-    else:
-        whitelist_frame.pack_forget()
-
-prop_vars["white-list"].trace_add("write", toggle_whitelist_ui)
-toggle_whitelist_ui()
-
-make_prop_dropdown(left_section1, "Gamemode", ["survival", "creative", "adventure", "spectator"], 
-                   default_index=0, key="gamemode").pack(fill="x", pady=2)
-make_prop_toggle(left_section1, "Force Gamemode", default=False, key="force-gamemode").pack(fill="x", pady=2)
-
-left_section2 = make_prop_section(left_panel, "WORLD SETTINGS", GREEN)
-make_prop_toggle(left_section2, "Command Blocks", default=True, key="enable-command-block").pack(fill="x", pady=2)
-make_prop_toggle(left_section2, "Spawn Monsters", default=True, key="spawn-monsters").pack(fill="x", pady=2)
-make_prop_toggle(left_section2, "Spawn Animals", default=True, key="spawn-animals").pack(fill="x", pady=2)
-make_prop_toggle(left_section2, "Spawn Villagers (NPCs)", default=True, key="spawn-npcs").pack(fill="x", pady=2)
-make_prop_toggle(left_section2, "Allow Nether", default=True, key="allow-nether").pack(fill="x", pady=2)
-
-# RIGHT PANEL
-right_section1 = make_prop_section(right_panel, "GAMEPLAY SETTINGS", VIOLET)
-make_prop_dropdown(right_section1, "Difficulty", ["peaceful", "easy", "normal", "hard"],
-                   default_index=1, key="difficulty").pack(fill="x", pady=2)
-make_prop_toggle(right_section1, "PvP", default=True, key="pvp").pack(fill="x", pady=2)
-make_prop_toggle(right_section1, "Allow Flight", default=True, key="allow-flight").pack(fill="x", pady=2)
-make_prop_number(right_section1, "Spawn Protection (blocks)", default=0, min_val=0, max_val=64, key="spawn-protection").pack(fill="x", pady=2)
-
-right_section2 = make_prop_section(right_panel, "SECURITY & NETWORK", ORANGE)
-make_prop_toggle(right_section2, "Cracked Mode (Online-Mode = False)", default=False, key="online-mode").pack(fill="x", pady=2)
-
-right_section3 = make_prop_section(right_panel, "RESOURCE PACK", YELLOW)
-make_prop_toggle(right_section3, "Require Resource Pack", default=False, key="require-resource-pack").pack(fill="x", pady=2)
-
-button_row = tk.Frame(props_tab, bg=BG0)
-button_row.pack(fill="x", padx=16, pady=(0, 16))
-
-def save_properties():
-    if not server_path:
-        log("[ERROR] No server loaded\n")
-        return
-    
-    prop_file = os.path.join(server_path, "server.properties")
-    if not os.path.exists(prop_file):
-        log("[ERROR] server.properties not found\n")
-        return
-    
-    properties = {}
-    with open(prop_file, "r") as f:
-        for line in f:
-            if "=" in line and not line.startswith("#"):
-                key, val = line.strip().split("=", 1)
-                properties[key] = val
-    
+def get_props_dict():
+    d = {}
     for key, var in prop_vars.items():
         if isinstance(var, tk.BooleanVar):
-            properties[key] = str(var.get()).lower()
-        elif isinstance(var, tk.StringVar):
-            properties[key] = var.get()
-        elif isinstance(var, tk.IntVar):
-            properties[key] = str(var.get())
-    
-    if prop_vars.get("online-mode", tk.BooleanVar()).get() == False:
-        properties["online-mode"] = "false"
-    else:
-        properties["online-mode"] = "true"
-    
-    whitelist_players = []
-    for i in range(whitelist_listbox.size()):
-        whitelist_players.append(whitelist_listbox.get(i))
-    
-    if whitelist_players:
-        properties["white-list"] = "true"
-        whitelist_file = os.path.join(server_path, "whitelist.json")
-        import json
-        whitelist_data = [{"uuid": "", "name": name} for name in whitelist_players]
-        with open(whitelist_file, "w") as f:
-            json.dump(whitelist_data, f, indent=2)
-    
-    with open(prop_file, "w") as f:
-        for key, val in properties.items():
-            f.write(f"{key}={val}\n")
-    
-    log("[INFO] Server properties saved\n")
+            raw = var.get()
+            if key == "online-mode":
+                d[key] = "false" if raw else "true"
+            else:
+                d[key] = "true" if raw else "false"
+        else:
+            d[key] = var.get()
+    return d
 
-def load_properties():
+def save_props_to_file():
     if not server_path:
+        log("[ERROR] No server loaded — cannot save properties.\n")
         return
-    
     prop_file = os.path.join(server_path, "server.properties")
+    existing = {}
+    if os.path.exists(prop_file):
+        with open(prop_file, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, _, v = line.partition("=")
+                    existing[k.strip()] = v.strip()
+    existing.update(get_props_dict())
+    with open(prop_file, "w") as f:
+        for k, v in existing.items():
+            f.write(f"{k}={v}\n")
+    log("[INFO] server.properties saved.\n")
+
+def load_props_from_file(prop_file):
     if not os.path.exists(prop_file):
         return
-    
-    properties = {}
+    mapping = {}
     with open(prop_file, "r") as f:
         for line in f:
-            if "=" in line and not line.startswith("#"):
-                key, val = line.strip().split("=", 1)
-                properties[key] = val
-    
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, _, v = line.partition("=")
+                mapping[k.strip()] = v.strip()
     for key, var in prop_vars.items():
-        if key in properties:
-            val = properties[key]
-            if isinstance(var, tk.BooleanVar):
-                var.set(val.lower() == "true")
-            elif isinstance(var, tk.StringVar):
-                var.set(val)
-            elif isinstance(var, tk.IntVar):
-                try:
-                    var.set(int(val))
-                except:
-                    pass
-    
-    if prop_vars.get("white-list", tk.BooleanVar()).get():
-        whitelist_file = os.path.join(server_path, "whitelist.json")
-        if os.path.exists(whitelist_file):
-            import json
-            try:
-                with open(whitelist_file, "r") as f:
-                    data = json.load(f)
-                    for entry in data:
-                        if "name" in entry:
-                            whitelist_listbox.insert(tk.END, entry["name"])
-            except:
-                pass
+        if key not in mapping:
+            continue
+        val = mapping[key]
+        if isinstance(var, tk.BooleanVar):
+            if key == "online-mode":
+                var.set(val == "false")
+            else:
+                var.set(val == "true")
+        else:
+            var.set(val)
+    if "gamemode" in mapping:
+        set_gamemode(mapping["gamemode"])
+    if "difficulty" in mapping:
+        set_difficulty(mapping["difficulty"])
 
-save_btn_frame, save_btn_lbl = make_btn(button_row, "💾  SAVE CHANGES", GREEN, command=save_properties)
-save_btn_frame.pack(side="left", padx=(0, 10))
-
-load_btn_frame, load_btn_lbl = make_btn(button_row, "⟳  LOAD", CYAN, command=load_properties)
-load_btn_frame.pack(side="left")
-
-reset_btn_frame, reset_btn_lbl = make_btn(button_row, "↺  RESET TO DEFAULTS", DIM)
-reset_btn_frame.pack(side="right")
-
-# ========== END PROPERTIES TAB ==========
+props_save_btn_f.bind("<Button-1>", lambda e: save_props_to_file())
+props_save_btn_l.bind("<Button-1>", lambda e: save_props_to_file())
 
 statusbar = tk.Frame(root, bg=BG1, height=26)
 statusbar.place(x=0, relwidth=1, rely=1.0, y=-26, height=26)
@@ -749,18 +851,9 @@ def insert_tree_nodes(parent, path):
     try:
         for item in sorted(os.listdir(path)):
             full = os.path.join(path, item)
-            is_dir = os.path.isdir(full)
-            if is_dir:
-                icon = "▸ "
-                tag = "folder"
-            elif item.endswith((".jar", ".bat", ".exe", ".sh")):
-                icon = "⚡ "
-                tag = "executable"
-            else:
-                icon = "   "
-                tag = "file"
-            node = tree.insert(parent, "end", text=icon + item, tags=(tag,))
-            if is_dir:
+            icon = "▸ " if os.path.isdir(full) else "  "
+            node = tree.insert(parent, "end", text=icon + item)
+            if os.path.isdir(full):
                 insert_tree_nodes(node, full)
     except:
         pass
@@ -777,7 +870,8 @@ def import_server():
     bat_file = bats[0] if bats else None
     log(f"[INFO] Imported: {folder}\n")
     path_lbl.config(text=f"  {folder}")
-    load_properties()
+    prop_file = os.path.join(folder, "server.properties")
+    load_props_from_file(prop_file)
 
 def read_output():
     global players
