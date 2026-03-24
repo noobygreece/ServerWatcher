@@ -10,6 +10,7 @@ from PIL import Image, ImageTk
 from io import BytesIO
 import math
 import time
+import random
 
 server_path = None
 bat_file = None
@@ -17,319 +18,455 @@ server_process = None
 players = []
 players_imgs = {}
 ram_history = []
+cpu_history = []
 
 root = tk.Tk()
 root.title("ServerWatcher PRO")
-root.geometry("1500x920")
-root.configure(bg="#080c10")
+root.geometry("1560x940")
+root.configure(bg="#03070d")
 root.resizable(True, True)
 
-BG0        = "#080c10"
-BG1        = "#0d1117"
-BG2        = "#111820"
-BG3        = "#1a2332"
-BORDER     = "#1e3048"
-ACCENT     = "#00e5ff"
-ACCENT2    = "#00ff88"
-ACCENT3    = "#ff6b35"
-RED        = "#ff3b5c"
-YELLOW     = "#f5c518"
-FG         = "#e8f4f8"
-FG2        = "#7a9bb5"
-FG3        = "#3d5a73"
+BG0    = "#03070d"
+BG1    = "#060d16"
+BG2    = "#0a1420"
+BG3    = "#0f1e2e"
+BG4    = "#162840"
+BORDER = "#1a3550"
+GRID   = "#0d1f30"
 
-FONT_MONO   = ("Consolas", 11)
-FONT_SMALL  = ("Consolas", 9)
-FONT_TITLE  = ("Consolas", 13, "bold")
-FONT_HEAD   = ("Consolas", 10, "bold")
-FONT_LABEL  = ("Consolas", 9)
+CYAN   = "#00f5ff"
+GREEN  = "#00ff7f"
+ORANGE = "#ff7b00"
+RED    = "#ff1f4b"
+YELLOW = "#ffe400"
+VIOLET = "#9f4fff"
+WHITE  = "#e0f0ff"
+DIM    = "#2a5070"
+DIMMER = "#152535"
+
+FONT_MONO  = ("Consolas", 11)
+FONT_SMALL = ("Consolas", 9)
+FONT_MED   = ("Consolas", 10, "bold")
+FONT_BIG   = ("Consolas", 13, "bold")
+FONT_HUGE  = ("Consolas", 16, "bold")
+FONT_TINY  = ("Consolas", 8)
 
 def ui(func):
     root.after(0, func)
 
+def hex_to_rgb(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i+2], 16) for i in (0, 2, 4))
+
+def lerp_color(c1, c2, t):
+    r1, g1, b1 = hex_to_rgb(c1)
+    r2, g2, b2 = hex_to_rgb(c2)
+    r = int(r1 + (r2 - r1) * t)
+    g = int(g1 + (g2 - g1) * t)
+    b = int(b1 + (b2 - b1) * t)
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+def make_btn(parent, text, color, command=None):
+    f = tk.Frame(parent, bg=BG1, padx=1, pady=1)
+    inner = tk.Frame(f, bg=color)
+    inner.pack(fill="both", expand=True)
+    lbl = tk.Label(inner, text=text, bg=color, fg=BG0,
+                   font=FONT_MED, padx=16, pady=7, cursor="hand2")
+    lbl.pack()
+
+    def _enter(e):
+        inner.config(bg=CYAN); lbl.config(bg=CYAN, fg=BG0); f.config(bg=CYAN)
+    def _leave(e):
+        inner.config(bg=color); lbl.config(bg=color, fg=BG0); f.config(bg=BG1)
+    def _click(e):
+        if command: command()
+
+    for w in (f, inner, lbl):
+        w.bind("<Enter>", _enter)
+        w.bind("<Leave>", _leave)
+        w.bind("<Button-1>", _click)
+    return f, lbl
+
+scan_canvas = tk.Canvas(root, bg=BG0, highlightthickness=0)
+scan_canvas.place(x=0, y=0, relwidth=1, relheight=1)
+
+scanline_offset = [0]
+
+def animate_scanlines():
+    scan_canvas.delete("scanline")
+    h = root.winfo_height()
+    w = root.winfo_width()
+    y = scanline_offset[0] % 4
+    while y < h:
+        scan_canvas.create_line(0, y, w, y, fill="#ffffff", stipple="gray12", tags="scanline")
+        y += 4
+    scanline_offset[0] = (scanline_offset[0] + 1) % 4
+    root.after(80, animate_scanlines)
+
+topbar = tk.Frame(root, bg=BG1, height=62)
+topbar.place(x=0, y=0, relwidth=1, height=62)
+
+topbar_canvas = tk.Canvas(topbar, bg=BG1, highlightthickness=0, height=62)
+topbar_canvas.place(x=0, y=0, relwidth=1, height=62)
+
+def draw_topbar_deco():
+    topbar_canvas.delete("all")
+    w = topbar_canvas.winfo_width() or 1560
+    topbar_canvas.create_rectangle(0, 0, w, 62, fill=BG1, outline="")
+    for i in range(0, w, 60):
+        topbar_canvas.create_line(i, 0, i, 62, fill=GRID, width=1)
+    topbar_canvas.create_line(0, 61, w, 61, fill=CYAN, width=1)
+
+topbar.bind("<Configure>", lambda e: draw_topbar_deco())
+
+logo_frame = tk.Frame(topbar, bg=BG1)
+logo_frame.place(x=20, y=0, height=62)
+
+logo_canvas = tk.Canvas(logo_frame, width=18, height=18, bg=BG1, highlightthickness=0)
+logo_canvas.pack(side="left", padx=(0, 10), pady=22)
+
+pulse_size = [0]
+pulse_dir  = [1]
+
+def animate_logo_pulse():
+    s = pulse_size[0]
+    logo_canvas.delete("all")
+    logo_canvas.create_oval(9-s, 9-s, 9+s, 9+s, fill="", outline=GREEN, width=1)
+    logo_canvas.create_oval(4, 4, 14, 14, fill=GREEN, outline="")
+    pulse_size[0] += pulse_dir[0]
+    if pulse_size[0] >= 8 or pulse_size[0] <= 0:
+        pulse_dir[0] *= -1
+    root.after(60, animate_logo_pulse)
+
+tk.Label(logo_frame, text="SERVER",  bg=BG1, fg=WHITE, font=("Consolas", 16, "bold")).pack(side="left")
+tk.Label(logo_frame, text="WATCHER", bg=BG1, fg=CYAN,  font=("Consolas", 16, "bold")).pack(side="left")
+tk.Label(logo_frame, text="  ·  PRO", bg=BG1, fg=DIM,  font=("Consolas", 10)).pack(side="left", pady=6)
+
+tk.Frame(topbar, bg=BORDER, width=1).place(x=320, y=10, height=42)
+
+btn_frame = tk.Frame(topbar, bg=BG1)
+btn_frame.place(x=340, y=12, height=38)
+
+start_btn_frame, start_btn_lbl = make_btn(btn_frame, "▶  START", GREEN)
+start_btn_frame.pack(side="left", padx=(0, 6))
+
+stop_btn_frame, stop_btn_lbl = make_btn(btn_frame, "■  STOP", RED)
+stop_btn_frame.pack(side="left", padx=(0, 6))
+
+import_btn_frame, import_btn_lbl = make_btn(btn_frame, "⊕  IMPORT", CYAN)
+import_btn_frame.pack(side="left")
+
+status_frame = tk.Frame(topbar, bg=BG1)
+status_frame.place(relx=1.0, x=-200, y=0, height=62, width=200)
+
+status_dot_c = tk.Canvas(status_frame, width=14, height=14, bg=BG1, highlightthickness=0)
+status_dot_c.pack(side="left", padx=(20, 6), pady=24)
+status_dot_c.create_oval(2, 2, 12, 12, fill=DIM,    outline="", tags="dot")
+status_dot_c.create_oval(5, 5, 9,  9,  fill=DIMMER, outline="", tags="dotcore")
+
+status_lbl = tk.Label(status_frame, text="OFFLINE", bg=BG1, fg=DIM, font=("Consolas", 9, "bold"))
+status_lbl.pack(side="left")
+
+status_ring_size = [0]
+status_ring_dir  = [1]
+_server_online   = [False]
+
+def animate_status_ring():
+    if _server_online[0]:
+        s = status_ring_size[0]
+        status_dot_c.delete("ring")
+        if s > 0:
+            status_dot_c.create_oval(7-s, 7-s, 7+s, 7+s,
+                                     fill="", outline=GREEN, width=1, tags="ring")
+        status_ring_size[0] += status_ring_dir[0]
+        if status_ring_size[0] >= 7 or status_ring_size[0] <= 0:
+            status_ring_dir[0] *= -1
+    root.after(50, animate_status_ring)
+
+def set_status(online: bool):
+    _server_online[0] = online
+    if online:
+        status_dot_c.itemconfig("dot",     fill=GREEN)
+        status_dot_c.itemconfig("dotcore", fill=GREEN)
+        status_lbl.config(text="ONLINE", fg=GREEN)
+    else:
+        status_dot_c.delete("ring")
+        status_dot_c.itemconfig("dot",     fill=DIM)
+        status_dot_c.itemconfig("dotcore", fill=DIMMER)
+        status_lbl.config(text="OFFLINE", fg=DIM)
+
+body = tk.Frame(root, bg=BG0)
+body.place(x=0, y=62, relwidth=1, relheight=1, height=-88)
+
+sidebar = tk.Frame(body, bg=BG1, width=240)
+sidebar.pack(side="left", fill="y")
+sidebar.pack_propagate(False)
+
+sidebar_header = tk.Frame(sidebar, bg=BG1)
+sidebar_header.pack(fill="x", padx=12, pady=(12, 6))
+tk.Label(sidebar_header, text="FILE TREE", bg=BG1, fg=DIM, font=("Consolas", 8, "bold")).pack(side="left")
+
+tk.Frame(sidebar, bg=CYAN, height=1).pack(fill="x", padx=12, pady=(0, 6))
+
+style = ttk.Style()
+style.theme_use("clam")
+style.configure("SW.Treeview",
+    background=BG2, foreground=DIM, fieldbackground=BG2,
+    borderwidth=0, font=("Consolas", 9), rowheight=24)
+style.configure("SW.Treeview.Heading",
+    background=BG3, foreground=DIM, font=("Consolas", 9, "bold"))
+style.map("SW.Treeview",
+    background=[("selected", BG4)],
+    foreground=[("selected", CYAN)])
+
+tree_wrap = tk.Frame(sidebar, bg=BG2)
+tree_wrap.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+
+tree_scroll = tk.Scrollbar(tree_wrap, bg=BG2, troughcolor=BG2,
+                            activebackground=BORDER, width=5, bd=0)
+tree_scroll.pack(side="right", fill="y")
+
+tree = ttk.Treeview(tree_wrap, style="SW.Treeview",
+                    yscrollcommand=tree_scroll.set, show="tree")
+tree.pack(fill="both", expand=True)
+tree_scroll.config(command=tree.yview)
+
+tk.Frame(body, bg=BORDER, width=1).pack(side="left", fill="y")
+
+content = tk.Frame(body, bg=BG0)
+content.pack(side="left", fill="both", expand=True)
+
+style.configure("SW.TNotebook", background=BG0, borderwidth=0, tabmargins=[0, 0, 0, 0])
+style.configure("SW.TNotebook.Tab",
+    background=BG1, foreground=DIM,
+    font=("Consolas", 10), padding=[22, 9], borderwidth=0)
+style.map("SW.TNotebook.Tab",
+    background=[("selected", BG0)],
+    foreground=[("selected", CYAN)])
+
+notebook = ttk.Notebook(content, style="SW.TNotebook")
+notebook.pack(fill="both", expand=True)
+
+logs_tab = tk.Frame(notebook, bg=BG0)
+notebook.add(logs_tab, text="  LOGS  ")
+
+log_header = tk.Frame(logs_tab, bg=BG0)
+log_header.pack(fill="x", padx=16, pady=(12, 0))
+tk.Label(log_header, text="◈  CONSOLE OUTPUT", bg=BG0, fg=DIM, font=("Consolas", 8, "bold")).pack(side="left")
+log_count_lbl = tk.Label(log_header, text="0 lines", bg=BG0, fg=DIMMER, font=FONT_TINY)
+log_count_lbl.pack(side="right")
+
+console_wrap = tk.Frame(logs_tab, bg=BORDER, bd=1)
+console_wrap.pack(fill="both", expand=True, padx=16, pady=(6, 0))
+console_inner = tk.Frame(console_wrap, bg=BG1)
+console_inner.pack(fill="both", expand=True, padx=1, pady=1)
+
+console = tk.Text(
+    console_inner, bg=BG1, fg=DIM,
+    insertbackground=CYAN, font=FONT_MONO,
+    relief="flat", bd=0, padx=14, pady=10,
+    state="disabled", selectbackground=BG4,
+    selectforeground=WHITE, spacing1=2)
+con_scroll = tk.Scrollbar(console_inner, bg=BG1, troughcolor=BG1,
+                           activebackground=BORDER, width=5, bd=0)
+con_scroll.pack(side="right", fill="y")
+console.pack(fill="both", expand=True)
+con_scroll.config(command=console.yview)
+console.config(yscrollcommand=con_scroll.set)
+
+console.tag_config("timestamp", foreground=DIMMER)
+console.tag_config("info",      foreground=GREEN)
+console.tag_config("error",     foreground=RED)
+console.tag_config("cmd",       foreground=CYAN, font=("Consolas", 11, "bold"))
+console.tag_config("default",   foreground=DIM)
+console.tag_config("boot",      foreground=VIOLET)
+
+log_line_count = [0]
+
 def log(text):
     def _log():
         console.config(state="normal")
-        tag = "info"
+        ts = time.strftime("%H:%M:%S")
         if "[ERROR]" in text or "[WARN]" in text:
             tag = "error"
         elif "[INFO]" in text:
             tag = "info"
         elif text.startswith(">"):
             tag = "cmd"
+            ts  = None
+        else:
+            tag = "default"
+        if ts:
+            console.insert(tk.END, f"[{ts}]  ", "timestamp")
         console.insert(tk.END, text, tag)
         console.see(tk.END)
         console.config(state="disabled")
+        log_line_count[0] += 1
+        log_count_lbl.config(text=f"{log_line_count[0]} lines")
     ui(_log)
-
-def make_btn(parent, text, color, command=None, width=None):
-    kw = dict(
-        text=text,
-        bg=color,
-        fg=BG0,
-        font=FONT_HEAD,
-        relief="flat",
-        bd=0,
-        cursor="hand2",
-        activebackground=ACCENT,
-        activeforeground=BG0,
-        padx=18,
-        pady=8,
-    )
-    if width:
-        kw["width"] = width
-    if command:
-        kw["command"] = command
-    btn = tk.Button(parent, **kw)
-    def _on(e): btn.config(bg=ACCENT)
-    def _off(e): btn.config(bg=color)
-    btn.bind("<Enter>", _on)
-    btn.bind("<Leave>", _off)
-    return btn
-
-topbar = tk.Frame(root, bg=BG1, height=54)
-topbar.pack(side="top", fill="x")
-topbar.pack_propagate(False)
-
-logo_frame = tk.Frame(topbar, bg=BG1)
-logo_frame.pack(side="left", padx=20, pady=0)
-
-dot_canvas = tk.Canvas(logo_frame, width=12, height=12, bg=BG1, highlightthickness=0)
-dot_canvas.create_oval(0, 0, 12, 12, fill=ACCENT2, outline="")
-dot_canvas.pack(side="left", padx=(0, 8), pady=20)
-
-tk.Label(logo_frame, text="SERVER", bg=BG1, fg=FG,
-         font=("Consolas", 14, "bold")).pack(side="left")
-tk.Label(logo_frame, text="WATCHER", bg=BG1, fg=ACCENT,
-         font=("Consolas", 14, "bold")).pack(side="left")
-tk.Label(logo_frame, text=" PRO", bg=BG1, fg=FG2,
-         font=("Consolas", 10)).pack(side="left", pady=4)
-
-tk.Frame(topbar, bg=BORDER, width=1).pack(side="left", fill="y", pady=10, padx=20)
-
-btn_frame = tk.Frame(topbar, bg=BG1)
-btn_frame.pack(side="left", pady=10)
-
-start_button = make_btn(btn_frame, "▶  START", ACCENT2)
-start_button.pack(side="left", padx=(0, 8))
-
-stop_button = make_btn(btn_frame, "■  STOP", RED)
-stop_button.pack(side="left", padx=(0, 8))
-
-import_button = make_btn(btn_frame, "⊕  IMPORT", ACCENT)
-import_button.pack(side="left")
-
-status_frame = tk.Frame(topbar, bg=BG1)
-status_frame.pack(side="right", padx=24)
-
-status_dot = tk.Canvas(status_frame, width=10, height=10, bg=BG1, highlightthickness=0)
-status_dot.create_oval(1, 1, 9, 9, fill=FG3, outline="", tags="dot")
-status_dot.pack(side="left", padx=(0, 6), pady=22)
-
-status_label = tk.Label(status_frame, text="OFFLINE", bg=BG1, fg=FG3,
-                        font=("Consolas", 9, "bold"))
-status_label.pack(side="left")
-
-def set_status(online: bool):
-    c, t = (ACCENT2, "ONLINE") if online else (FG3, "OFFLINE")
-    status_dot.itemconfig("dot", fill=c)
-    status_label.config(text=t, fg=c)
-
-glow_bar = tk.Canvas(root, height=2, bg=ACCENT, highlightthickness=0)
-glow_bar.pack(side="top", fill="x")
-
-body = tk.Frame(root, bg=BG0)
-body.pack(side="top", fill="both", expand=True)
-
-sidebar = tk.Frame(body, bg=BG1, width=230)
-sidebar.pack(side="left", fill="y")
-sidebar.pack_propagate(False)
-
-tk.Label(sidebar, text="FILE TREE", bg=BG1, fg=FG3,
-         font=("Consolas", 8, "bold")).pack(anchor="w", padx=14, pady=(14, 4))
-
-style = ttk.Style()
-style.theme_use("clam")
-style.configure("Dark.Treeview",
-    background=BG2,
-    foreground=FG2,
-    fieldbackground=BG2,
-    borderwidth=0,
-    font=("Consolas", 9),
-    rowheight=22,
-)
-style.configure("Dark.Treeview.Heading",
-    background=BG3,
-    foreground=FG3,
-    font=("Consolas", 9, "bold"),
-)
-style.map("Dark.Treeview",
-    background=[("selected", BG3)],
-    foreground=[("selected", ACCENT)],
-)
-
-tree_frame = tk.Frame(sidebar, bg=BG2, bd=0)
-tree_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
-
-tree_scroll = tk.Scrollbar(tree_frame, bg=BG2, troughcolor=BG2,
-                            activebackground=BORDER, width=6, bd=0)
-tree_scroll.pack(side="right", fill="y")
-
-tree = ttk.Treeview(tree_frame, style="Dark.Treeview",
-                    yscrollcommand=tree_scroll.set, show="tree")
-tree.pack(fill="both", expand=True)
-tree_scroll.config(command=tree.yview)
-
-content = tk.Frame(body, bg=BG0)
-content.pack(side="left", fill="both", expand=True, padx=(1, 0))
-
-style.configure("Dark.TNotebook",
-    background=BG0,
-    borderwidth=0,
-    tabmargins=[0, 0, 0, 0],
-)
-style.configure("Dark.TNotebook.Tab",
-    background=BG1,
-    foreground=FG3,
-    font=("Consolas", 10),
-    padding=[20, 8],
-    borderwidth=0,
-)
-style.map("Dark.TNotebook.Tab",
-    background=[("selected", BG0)],
-    foreground=[("selected", ACCENT)],
-)
-
-notebook = ttk.Notebook(content, style="Dark.TNotebook")
-notebook.pack(fill="both", expand=True, padx=0, pady=0)
-
-logs_tab = tk.Frame(notebook, bg=BG0)
-notebook.add(logs_tab, text="  LOGS  ")
-
-console_outer = tk.Frame(logs_tab, bg=BORDER, bd=1)
-console_outer.pack(fill="both", expand=True, padx=16, pady=(14, 0))
-
-console = tk.Text(
-    console_outer,
-    bg=BG1,
-    fg=FG2,
-    insertbackground=ACCENT,
-    font=FONT_MONO,
-    relief="flat",
-    bd=0,
-    padx=14,
-    pady=10,
-    state="disabled",
-    selectbackground=BG3,
-    selectforeground=FG,
-)
-console_scroll = tk.Scrollbar(console_outer, bg=BG1, troughcolor=BG1,
-                               activebackground=BORDER, width=6, bd=0)
-console_scroll.pack(side="right", fill="y")
-console.pack(fill="both", expand=True)
-console_scroll.config(command=console.yview)
-console.config(yscrollcommand=console_scroll.set)
-
-console.tag_config("info",  foreground=ACCENT2)
-console.tag_config("error", foreground=RED)
-console.tag_config("cmd",   foreground=ACCENT)
-console.tag_config("default", foreground=FG2)
 
 cmd_row = tk.Frame(logs_tab, bg=BG0)
 cmd_row.pack(fill="x", padx=16, pady=10)
 
-prompt_lbl = tk.Label(cmd_row, text="  ❯  ", bg=BG1, fg=ACCENT,
-                       font=("Consolas", 12, "bold"))
-prompt_lbl.pack(side="left")
+prompt_canvas = tk.Canvas(cmd_row, width=32, height=36, bg=BG1, highlightthickness=0)
+prompt_canvas.pack(side="left")
+prompt_canvas.create_text(16, 18, text="❯", fill=CYAN, font=("Consolas", 14, "bold"))
 
-command_entry = tk.Entry(
-    cmd_row,
-    bg=BG1,
-    fg=FG,
-    insertbackground=ACCENT,
-    font=FONT_MONO,
-    relief="flat",
-    bd=0,
-)
-command_entry.pack(side="left", fill="x", expand=True, ipady=8)
+command_entry = tk.Entry(cmd_row, bg=BG1, fg=WHITE,
+                         insertbackground=CYAN, font=FONT_MONO,
+                         relief="flat", bd=0)
+command_entry.pack(side="left", fill="x", expand=True, ipady=9)
 
-send_button = make_btn(cmd_row, "SEND", ACCENT)
-send_button.pack(side="left", padx=(8, 0))
+tk.Frame(cmd_row, bg=BORDER, width=1).pack(side="left", fill="y", pady=4)
+
+send_btn_frame, send_btn_lbl = make_btn(cmd_row, "SEND", CYAN)
+send_btn_frame.pack(side="left", padx=(6, 0))
 
 diag_tab = tk.Frame(notebook, bg=BG0)
 notebook.add(diag_tab, text="  DIAGNOSTICS  ")
 
-ram_card = tk.Frame(diag_tab, bg=BG1)
-ram_card.pack(fill="x", padx=16, pady=(16, 0))
+def make_diag_card(parent, title, accent_color):
+    outer = tk.Frame(parent, bg=accent_color, pady=1, padx=1)
+    inner = tk.Frame(outer, bg=BG1)
+    inner.pack(fill="both", expand=True)
+    header = tk.Frame(inner, bg=BG1)
+    header.pack(fill="x", padx=14, pady=(10, 4))
+    dot = tk.Canvas(header, width=8, height=8, bg=BG1, highlightthickness=0)
+    dot.create_oval(0, 0, 8, 8, fill=accent_color, outline="")
+    dot.pack(side="left", padx=(0, 8))
+    tk.Label(header, text=title, bg=BG1, fg=accent_color,
+             font=("Consolas", 8, "bold")).pack(side="left")
+    return outer, inner, header
 
-ram_header = tk.Frame(ram_card, bg=BG1)
-ram_header.pack(fill="x", padx=14, pady=(12, 6))
-tk.Label(ram_header, text="RAM USAGE", bg=BG1, fg=FG3,
-         font=("Consolas", 8, "bold")).pack(side="left")
-ram_pct_label = tk.Label(ram_header, text="0%", bg=BG1, fg=ACCENT,
-                          font=("Consolas", 11, "bold"))
-ram_pct_label.pack(side="right")
-ram_mb_label = tk.Label(ram_header, text="0 MB / 0 MB", bg=BG1, fg=FG3,
-                         font=("Consolas", 8))
-ram_mb_label.pack(side="right", padx=14)
-
-ram_track = tk.Frame(ram_card, bg=BG3, height=6)
-ram_track.pack(fill="x", padx=14, pady=(0, 4))
+ram_outer, ram_inner, ram_hdr = make_diag_card(diag_tab, "RAM USAGE", GREEN)
+ram_outer.pack(fill="x", padx=16, pady=(16, 0))
+ram_pct_lbl = tk.Label(ram_hdr, text="0%", bg=BG1, fg=GREEN, font=("Consolas", 18, "bold"))
+ram_pct_lbl.pack(side="right")
+ram_mb_lbl = tk.Label(ram_hdr, text="– MB / – MB", bg=BG1, fg=DIM, font=FONT_TINY)
+ram_mb_lbl.pack(side="right", padx=12)
+ram_track = tk.Frame(ram_inner, bg=BG3, height=8)
+ram_track.pack(fill="x", padx=14, pady=(2, 4))
 ram_track.pack_propagate(False)
+ram_fill = tk.Frame(ram_track, bg=GREEN, height=8)
+ram_fill.place(x=0, y=0, height=8, relwidth=0.0)
+ram_canvas = tk.Canvas(ram_inner, height=80, bg=BG1, highlightthickness=0)
+ram_canvas.pack(fill="x", padx=14, pady=(2, 12))
 
-ram_fill = tk.Frame(ram_track, bg=ACCENT2, height=6)
-ram_fill.place(x=0, y=0, height=6, relwidth=0.0)
+cpu_outer, cpu_inner, cpu_hdr = make_diag_card(diag_tab, "CPU USAGE", CYAN)
+cpu_outer.pack(fill="x", padx=16, pady=(10, 0))
+cpu_pct_lbl = tk.Label(cpu_hdr, text="0%", bg=BG1, fg=CYAN, font=("Consolas", 18, "bold"))
+cpu_pct_lbl.pack(side="right")
+cpu_track = tk.Frame(cpu_inner, bg=BG3, height=8)
+cpu_track.pack(fill="x", padx=14, pady=(2, 4))
+cpu_track.pack_propagate(False)
+cpu_fill = tk.Frame(cpu_track, bg=CYAN, height=8)
+cpu_fill.place(x=0, y=0, height=8, relwidth=0.0)
+cpu_canvas = tk.Canvas(cpu_inner, height=80, bg=BG1, highlightthickness=0)
+cpu_canvas.pack(fill="x", padx=14, pady=(2, 12))
 
-ram_canvas = tk.Canvas(ram_card, height=70, bg=BG1, highlightthickness=0)
-ram_canvas.pack(fill="x", padx=14, pady=(4, 12))
-
-tk.Label(diag_tab, text="ONLINE PLAYERS", bg=BG0, fg=FG3,
-         font=("Consolas", 8, "bold")).pack(anchor="w", padx=30, pady=(18, 6))
-
-players_card = tk.Frame(diag_tab, bg=BG1)
-players_card.pack(fill="both", expand=True, padx=16, pady=(0, 16))
-
-players_canvas = tk.Canvas(players_card, bg=BG1, highlightthickness=0)
+players_outer, players_inner, players_hdr = make_diag_card(diag_tab, "ONLINE PLAYERS", VIOLET)
+players_outer.pack(fill="both", expand=True, padx=16, pady=(10, 16))
+player_count_lbl = tk.Label(players_hdr, text="0 players", bg=BG1, fg=DIM, font=FONT_TINY)
+player_count_lbl.pack(side="right")
+players_canvas = tk.Canvas(players_inner, bg=BG1, highlightthickness=0)
 players_canvas.pack(fill="both", expand=True, padx=10, pady=10)
 
 props_tab = tk.Frame(notebook, bg=BG0)
 notebook.add(props_tab, text="  PROPERTIES  ")
-
-props_outer = tk.Frame(props_tab, bg=BORDER)
-props_outer.pack(fill="both", expand=True, padx=16, pady=14)
-
-props_text = tk.Text(
-    props_outer,
-    bg=BG1,
-    fg=ACCENT2,
-    insertbackground=ACCENT,
-    font=FONT_MONO,
-    relief="flat",
-    bd=0,
-    padx=14,
-    pady=10,
-    selectbackground=BG3,
-)
+props_hdr_row = tk.Frame(props_tab, bg=BG0)
+props_hdr_row.pack(fill="x", padx=16, pady=(12, 0))
+tk.Label(props_hdr_row, text="◈  SERVER.PROPERTIES", bg=BG0, fg=DIM,
+         font=("Consolas", 8, "bold")).pack(side="left")
+props_outer = tk.Frame(props_tab, bg=BORDER, bd=1)
+props_outer.pack(fill="both", expand=True, padx=16, pady=(6, 14))
+props_inner_frame = tk.Frame(props_outer, bg=BG1)
+props_inner_frame.pack(fill="both", expand=True, padx=1, pady=1)
+props_text = tk.Text(props_inner_frame, bg=BG1, fg=GREEN,
+                     insertbackground=CYAN, font=FONT_MONO,
+                     relief="flat", bd=0, padx=14, pady=10,
+                     selectbackground=BG4, spacing1=2)
 props_text.pack(fill="both", expand=True)
 
 statusbar = tk.Frame(root, bg=BG1, height=26)
-statusbar.pack(side="bottom", fill="x")
-statusbar.pack_propagate(False)
+statusbar.place(x=0, relwidth=1, rely=1.0, y=-26, height=26)
+tk.Frame(statusbar, bg=CYAN, width=3).pack(side="left", fill="y")
+tk.Frame(statusbar, bg=BG0, width=1).pack(side="left", fill="y")
+path_lbl = tk.Label(statusbar, text="  No server loaded", bg=BG1, fg=DIM, font=FONT_TINY)
+path_lbl.pack(side="left")
+uptime_lbl = tk.Label(statusbar, text="", bg=BG1, fg=DIM, font=FONT_TINY)
+uptime_lbl.pack(side="right", padx=14)
+tk.Label(statusbar, text="ServerWatcher PRO  v3.0", bg=BG1, fg=DIMMER, font=FONT_TINY).pack(side="right", padx=14)
 
-tk.Frame(statusbar, bg=ACCENT, width=3).pack(side="left", fill="y")
+server_start_time = [None]
 
-path_label = tk.Label(statusbar, text="No server loaded",
-                      bg=BG1, fg=FG3, font=("Consolas", 8))
-path_label.pack(side="left", padx=10)
+def update_uptime():
+    if server_start_time[0] and _server_online[0]:
+        elapsed = int(time.time() - server_start_time[0])
+        h = elapsed // 3600
+        m = (elapsed % 3600) // 60
+        s = elapsed % 60
+        uptime_lbl.config(text=f"UPTIME  {h:02d}:{m:02d}:{s:02d}", fg=GREEN)
+    else:
+        uptime_lbl.config(text="")
+    root.after(1000, update_uptime)
 
-tk.Label(statusbar, text="ServerWatcher PRO  v2.0",
-         bg=BG1, fg=FG3, font=("Consolas", 8)).pack(side="right", padx=14)
+BOOT_LINES = [
+    "ServerWatcher PRO v3.0 — initializing...",
+    "Loading core modules.............. [OK]",
+    "Binding process monitor........... [OK]",
+    "Starting RAM telemetry............. [OK]",
+    "Connecting diagnostic bus.......... [OK]",
+    "UI subsystems ready.",
+    "─" * 52,
+    "Ready. Import a server to begin.",
+    "",
+]
+
+def play_boot_sequence(lines, idx=0):
+    if idx < len(lines):
+        def _insert():
+            console.config(state="normal")
+            console.insert(tk.END, lines[idx] + "\n", "boot")
+            console.see(tk.END)
+            console.config(state="disabled")
+        ui(_insert)
+        root.after(120, lambda: play_boot_sequence(lines, idx + 1))
+
+def draw_sparkline(canvas, history, color, h=80):
+    canvas.delete("all")
+    W = canvas.winfo_width() or 800
+    pts = history[-(W // 3):]
+    if len(pts) < 2:
+        return
+    step = W / max(len(pts) - 1, 1)
+    poly = []
+    for i, v in enumerate(pts):
+        x = i * step
+        y = h - (v / 100 * (h - 10)) - 2
+        poly.append((x, y))
+    poly_fill = list(poly) + [(W, h), (0, h)]
+    flat = [c for pair in poly_fill for c in pair]
+    canvas.create_polygon(flat, fill=lerp_color(BG0, color, 0.08), outline="")
+    for i in range(len(pts) - 1):
+        frac = i / max(len(pts) - 1, 1)
+        lc   = lerp_color(BG4, color, frac)
+        x1   = i * step
+        y1   = h - (pts[i] / 100 * (h - 10)) - 2
+        x2   = (i + 1) * step
+        y2   = h - (pts[i + 1] / 100 * (h - 10)) - 2
+        canvas.create_line(x1, y1, x2, y2, fill=lc, width=2, smooth=True)
+    lx = (len(pts) - 1) * step
+    ly = h - (pts[-1] / 100 * (h - 10)) - 2
+    canvas.create_oval(lx - 4, ly - 4, lx + 4, ly + 4, fill=color, outline=BG1, width=2)
+    canvas.create_text(lx - 2, ly - 14, text=f"{pts[-1]}%", fill=color,
+                       font=("Consolas", 8, "bold"), anchor="center")
 
 def insert_tree_nodes(parent, path):
     try:
         for item in sorted(os.listdir(path)):
             full = os.path.join(path, item)
-            node = tree.insert(parent, "end", text=("📁 " if os.path.isdir(full) else "  ") + item)
+            icon = "▸ " if os.path.isdir(full) else "  "
+            node = tree.insert(parent, "end", text=icon + item)
             if os.path.isdir(full):
                 insert_tree_nodes(node, full)
     except:
@@ -346,7 +483,7 @@ def import_server():
     bats = [f for f in os.listdir(folder) if f.endswith(".bat")]
     bat_file = bats[0] if bats else None
     log(f"[INFO] Imported: {folder}\n")
-    path_label.config(text=folder)
+    path_lbl.config(text=f"  {folder}")
     props_text.delete("1.0", tk.END)
     prop_file = os.path.join(folder, "server.properties")
     if os.path.exists(prop_file):
@@ -370,56 +507,30 @@ def read_output():
 def update_ram():
     if server_process:
         try:
-            p = psutil.Process(server_process.pid)
-            mem = p.memory_info().rss / (1024 * 1024)
-            max_ram = psutil.virtual_memory().total / (1024 * 1024)
-            percent = min(int(mem / max_ram * 100), 100)
-
-            ram_history.append(percent)
-            if len(ram_history) > 120:
+            p      = psutil.Process(server_process.pid)
+            mem    = p.memory_info().rss / (1024 * 1024)
+            total  = psutil.virtual_memory().total / (1024 * 1024)
+            pct    = min(int(mem / total * 100), 100)
+            ram_history.append(pct)
+            if len(ram_history) > 300:
                 ram_history.pop(0)
+            cpu_pct = psutil.cpu_percent(interval=None)
+            cpu_history.append(int(cpu_pct))
+            if len(cpu_history) > 300:
+                cpu_history.pop(0)
 
             def draw():
-                ram_pct_label.config(text=f"{percent}%")
-                ram_mb_label.config(text=f"{int(mem)} MB / {int(max_ram)} MB")
-
-                color = ACCENT2 if percent < 50 else YELLOW if percent < 80 else RED
-                ram_pct_label.config(fg=color)
-
-                rel = percent / 100
-                ram_fill.place(relwidth=rel)
-                ram_fill.config(bg=color)
-
-                ram_canvas.delete("all")
-                W = ram_canvas.winfo_width() or 460
-                H = 70
-                pts = ram_history[-W:]
-                if len(pts) < 2:
-                    return
-
-                step = W / max(len(pts) - 1, 1)
-
-                poly = []
-                for i, v in enumerate(pts):
-                    x = i * step
-                    y = H - (v / 100 * (H - 8)) - 2
-                    poly.append((x, y))
-                poly_fill = list(poly) + [(W, H), (0, H)]
-                flat = [c for pair in poly_fill for c in pair]
-                ram_canvas.create_polygon(flat, fill=BG3, outline="")
-
-                for i in range(len(pts) - 1):
-                    x1 = i * step
-                    y1 = H - (pts[i] / 100 * (H - 8)) - 2
-                    x2 = (i + 1) * step
-                    y2 = H - (pts[i + 1] / 100 * (H - 8)) - 2
-                    ram_canvas.create_line(x1, y1, x2, y2, fill=color, width=1.5, smooth=True)
-
-                lx = (len(pts) - 1) * step
-                ly = H - (pts[-1] / 100 * (H - 8)) - 2
-                ram_canvas.create_oval(lx - 3, ly - 3, lx + 3, ly + 3,
-                                       fill=color, outline=BG1, width=2)
-
+                rc = GREEN if pct < 50 else YELLOW if pct < 80 else RED
+                ram_pct_lbl.config(text=f"{pct}%", fg=rc)
+                ram_mb_lbl.config(text=f"{int(mem)} MB / {int(total)} MB")
+                ram_fill.place(relwidth=pct / 100)
+                ram_fill.config(bg=rc)
+                draw_sparkline(ram_canvas, ram_history, rc)
+                cc = CYAN if cpu_pct < 60 else YELLOW if cpu_pct < 85 else RED
+                cpu_pct_lbl.config(text=f"{int(cpu_pct)}%", fg=cc)
+                cpu_fill.place(relwidth=cpu_pct / 100)
+                cpu_fill.config(bg=cc)
+                draw_sparkline(cpu_canvas, cpu_history, cc)
             ui(draw)
         except:
             pass
@@ -429,25 +540,25 @@ def update_players():
     global players_imgs
     players_canvas.delete("all")
     players_imgs.clear()
-    x = 14
+    x = 16
     for p in players:
         try:
             r = requests.get(f"https://minotar.net/avatar/{p}/40.png", timeout=3)
             if r.status_code == 200:
                 img = ImageTk.PhotoImage(Image.open(BytesIO(r.content)))
                 players_imgs[p] = img
-                players_canvas.create_oval(x - 2, 8, x + 44, 54, outline=ACCENT, width=1.5)
-                players_canvas.create_image(x + 21, 31, image=img)
-                players_canvas.create_text(x + 21, 62, text=p,
-                                           fill=FG2, font=("Consolas", 8))
-                x += 72
+                players_canvas.create_oval(x - 3, 7, x + 43, 53, outline=VIOLET, width=2)
+                players_canvas.create_oval(x - 6, 4, x + 46, 56, outline=DIMMER, width=1)
+                players_canvas.create_image(x + 20, 30, image=img)
+                players_canvas.create_text(x + 20, 64, text=p, fill=DIM, font=FONT_TINY)
+                x += 76
         except:
             pass
-
     if not players:
-        players_canvas.create_text(20, 30, text="No players online",
-                                   fill=FG3, font=FONT_SMALL, anchor="w")
-
+        players_canvas.create_text(16, 30, text="No players currently online",
+                                   fill=DIMMER, font=("Consolas", 10), anchor="w")
+    else:
+        player_count_lbl.config(text=f"{len(players)} online")
     root.after(5000, update_players)
 
 def start_server():
@@ -464,25 +575,23 @@ def start_server():
                 stderr=subprocess.STDOUT,
                 stdin=subprocess.PIPE,
                 text=True,
-                shell=True
-            )
+                shell=True)
         else:
             jars = [f for f in os.listdir(server_path) if f.endswith(".jar")]
             if not jars:
                 log("[ERROR] No .jar file found!\n")
                 return
-            jar = jars[0]
             server_process = subprocess.Popen(
-                ["java", "-jar", jar, "nogui"],
+                ["java", "-jar", jars[0], "nogui"],
                 cwd=server_path,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 stdin=subprocess.PIPE,
-                text=True
-            )
+                text=True)
         threading.Thread(target=read_output, daemon=True).start()
         update_players()
         set_status(True)
+        server_start_time[0] = time.time()
         log("[INFO] Server started\n")
     except Exception as e:
         log(f"[ERROR] {e}\n")
@@ -497,6 +606,7 @@ def stop_server():
             server_process.terminate()
         server_process = None
         set_status(False)
+        server_start_time[0] = None
 
 def send_command(event=None):
     if server_process:
@@ -510,8 +620,7 @@ def on_close():
     global server_process
     confirm = messagebox.askyesno(
         "Exit ServerWatcher PRO",
-        "Closing will terminate the server and all related processes.\nContinue?"
-    )
+        "Closing will terminate the server and all related processes.\nContinue?")
     if not confirm:
         return
     if server_process and server_process.poll() is None:
@@ -524,11 +633,24 @@ def on_close():
 
 root.protocol("WM_DELETE_WINDOW", on_close)
 
-start_button.config(command=start_server)
-stop_button.config(command=stop_server)
-import_button.config(command=import_server)
-send_button.config(command=send_command)
+start_btn_frame.bind("<Button-1>",  lambda e: start_server())
+start_btn_lbl.bind("<Button-1>",    lambda e: start_server())
+stop_btn_frame.bind("<Button-1>",   lambda e: stop_server())
+stop_btn_lbl.bind("<Button-1>",     lambda e: stop_server())
+import_btn_frame.bind("<Button-1>", lambda e: import_server())
+import_btn_lbl.bind("<Button-1>",   lambda e: import_server())
+send_btn_frame.bind("<Button-1>",   lambda e: send_command())
+send_btn_lbl.bind("<Button-1>",     lambda e: send_command())
 command_entry.bind("<Return>", send_command)
 
-update_ram()
+root.after(200, lambda: [
+    draw_topbar_deco(),
+    animate_logo_pulse(),
+    animate_status_ring(),
+    animate_scanlines(),
+    update_ram(),
+    update_uptime(),
+    play_boot_sequence(BOOT_LINES),
+])
+
 root.mainloop()
