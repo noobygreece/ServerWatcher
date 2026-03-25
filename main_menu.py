@@ -441,6 +441,8 @@ def _row(label, hint):
     lc.bind("<MouseWheel>", _mwheel)
     return rc
 
+toggle_syncers = {}
+
 def _toggle(key, default_on, rc):
     var = tk.BooleanVar(value=default_on)
     prop_vars[key] = var
@@ -459,18 +461,22 @@ def _toggle(key, default_on, rc):
                              outline=GREEN if on else BORDER, width=1)
         kx = 34 if on else 12
         ind.create_oval(kx-7, 5, kx+7, 19, fill=GREEN if on else DIM, outline="")
+        vlbl.config(text="ON" if on else "OFF", fg=GREEN if on else DIM)
 
-    def _click(_e=None):
-        v = not var.get()
-        var.set(v)
+    def _sync():
+        v = var.get()
         _draw(v)
-        vlbl.config(text="ON" if v else "OFF", fg=GREEN if v else DIM)
         if key == "white-list":
             if v:
                 wl_expander.pack(fill="x", padx=16, pady=(0, 4))
             else:
                 wl_expander.pack_forget()
 
+    def _click(_e=None):
+        var.set(not var.get())
+        _sync()
+
+    toggle_syncers[key] = _sync
     _draw(default_on)
     for w in (ind, vlbl, tf):
         w.bind("<Button-1>", _click)
@@ -673,6 +679,8 @@ def load_props_from_file(prop_file):
             var.set(val)
     if "gamemode"   in mapping: set_gamemode(mapping["gamemode"])
     if "difficulty" in mapping: set_difficulty(mapping["difficulty"])
+    for k, sync_fn in toggle_syncers.items():
+        sync_fn()
 
 props_save_btn_f.bind("<Button-1>", lambda e: save_props_to_file())
 props_save_btn_l.bind("<Button-1>", lambda e: save_props_to_file())
