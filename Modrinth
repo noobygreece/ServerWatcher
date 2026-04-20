@@ -1,0 +1,346 @@
+# ===================================================Not mine
+# MODRINTH TAB (STABLE + NO FREEZE + PAGINATION + SEARCH)
+# =========================================================
+
+import tkinter as tk
+import requests
+import os
+from PIL import Image, ImageTk
+from io import BytesIO
+
+USER_AGENT = "ServerWatcherPRO/1.0"
+ITEMS_PER_LOAD = 20
+
+
+def create_modrinth_tab(notebook, get_server_path):
+
+    tab = tk.Frame(notebook, bg="#03070d")
+    notebook.add(tab, text=" MODRINTH ")
+
+    # =====================================================
+    # STATE
+    # =====================================================
+    offset = [0]
+    query = [""]
+    started = [False]
+    loading = [False]
+
+    queue = []
+    loading_item = [False]
+
+    icon_cache = {}
+
+    current_page = [0]
+    max_pages = 65
+
+    # =====================================================
+    # TITLE
+    # =====================================================
+    tk.Label(
+        tab,
+        text="MODRINTH BROWSER",
+        fg="cyan",
+        bg="#03070d",
+        font=("Consolas", 12, "bold")
+    ).pack(pady=5)
+
+    # =====================================================
+    # SEARCH BAR
+    # =====================================================
+    search_frame = tk.Frame(tab, bg="#03070d")
+    search_frame.pack(fill="x", padx=10, pady=5)
+
+    search_entry = tk.Entry(
+        search_frame,
+        bg="#0a1420",
+        fg="white",
+        insertbackground="cyan",
+        font=("Consolas", 10),
+        relief="flat"
+    )
+    search_entry.pack(side="left", fill="x", expand=True, ipady=6)
+
+    # =====================================================
+    # SCROLL AREA
+    # =====================================================
+    canvas = tk.Canvas(tab, bg="#03070d", highlightthickness=0)
+    scrollbar = tk.Scrollbar(tab, command=canvas.yview)
+
+    frame = tk.Frame(canvas, bg="#03070d")
+
+    frame.bind(
+        "<Configure>",
+        lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+    )
+
+    canvas.create_window((0, 0), window=frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    canvas.pack(side="left", fill="both", expand=True)
+    scrollbar.pack(side="right", fill="y")
+
+    # =====================================================
+    # DETECT SERVER TYPE
+    # =====================================================
+    def detect_type(path):
+        if not path:
+            return "plugin"
+
+        for f in os.listdir(path):
+            f = f.lower()
+            if "fabric" in f or "forge" in f:
+                return "mod"
+        return "plugin"
+
+    # =====================================================
+    # INSTALL
+    # =====================================================
+    def install(project):
+        path = get_server_path()
+        if not path:
+            return
+
+        folder = "mods" if detect_type(path) == "mod" else "plugins"
+        os.makedirs(os.path.join(path, folder), exist_ok=True)
+
+        try:
+            r = requests.get(
+                f"https://api.modrinth.com/v2/project/{project['project_id']}/version",
+                headers={"User-Agent": USER_AGENT}
+            )
+            versions = r.json()
+            url = versions[0]["files"][0]["url"]
+
+            file_path = os.path.join(path, folder, project["title"] + ".jar")
+
+            data = requests.get(url, stream=True)
+            with open(file_path, "wb") as f:
+                for chunk in data.iter_content(8192):
+                    f.write(chunk)
+
+            print("Installed:", project["title"])
+
+        except Exception as e:
+            print("Install error:", e)
+
+    # =====================================================
+    # CARD UI
+    # =====================================================
+    def create_card(project):
+
+        card = tk.Frame(frame, bg="#0a1420", padx=10, pady=10)
+        card.pack(fill="x", padx=10, pady=5)
+
+        icon = tk.Label(card, bg="#0a1420")
+        icon.pack(side="left", padx=8)
+
+        pid = project["project_id"]
+
+        if project.get("icon_url"):
+            if pid in icon_cache:
+                icon.config(image=icon_cache[pid])
+            else:
+                try:
+                    r = requests.get(project["icon_url"], timeout=3)
+                    img = Image.open(BytesIO(r.content)).resize((48, 48))
+                    photo = ImageTk.PhotoImage(img)
+
+                    icon_cache[pid] = photo
+                    icon.config(image=photo)
+                except:
+                    pass
+
+        info = tk.Frame(card, bg="#0a1420")
+        info.pack(side="left", fill="x", expand=True)
+
+        tk.Label(
+            info,
+            text=project["title"],
+            fg="cyan",
+            bg="#0a1420",
+            font=("Consolas", 11, "bold")
+        ).pack(anchor="w")
+
+        tk.Label(
+            info,
+            text=project.get("description", "")[:120],
+            fg="white",
+            bg="#0a1420",
+            font=("Consolas", 9),
+            wraplength=500
+        ).pack(anchor="w")
+
+        tk.Button(
+            card,
+            text="INSTALL",
+            bg="cyan",
+            fg="#03070d",
+            command=lambda: install(project)
+        ).pack(side="right")
+
+    # =====================================================
+    # PROCESS QUEUE (NO FREEZE)
+    # =====================================================
+    def process_queue():
+        if loading_item[0]:
+            return
+
+        if not queue:
+            return
+
+        loading_item[0] = True
+        project = queue.pop(0)
+
+        def step():
+            create_card(project)
+            loading_item[0] = False
+            canvas.after(25, process_queue)
+
+        canvas.after(1, step)
+
+    # =====================================================
+    # LOAD DATA
+    # =====================================================
+    def load_more():
+        if loading[0]:
+            return
+
+        loading[0] = True
+
+        path = get_server_path()
+        server_type = detect_type(path)
+
+        facets = '[["project_type:plugin"]]'
+        if server_type == "mod":
+            facets = '[["project_type:mod"]]'
+
+        try:
+            res = requests.get(
+                "https://api.modrinth.com/v2/search",
+                params={
+                    "query": query[0],
+                    "limit": ITEMS_PER_LOAD,
+                    "offset": offset[0],
+                    "facets": facets
+                },
+                headers={"User-Agent": USER_AGENT}
+            )
+
+            data = res.json().get("hits", [])
+
+            offset[0] += ITEMS_PER_LOAD
+
+            queue.extend(data)
+            process_queue()
+
+        except Exception as e:
+            print("Load error:", e)
+
+        loading[0] = False
+
+    # =====================================================
+    # START (LAZY)
+    # =====================================================
+    def start_modrinth():
+        if started[0]:
+            return
+        started[0] = True
+
+        for w in frame.winfo_children():
+            w.destroy()
+
+        offset[0] = 0
+        load_more()
+        draw_pages()
+
+    # =====================================================
+    # SEARCH
+    # =====================================================
+    def run_search():
+        offset[0] = 0
+        query[0] = search_entry.get().strip()
+
+        for w in frame.winfo_children():
+            w.destroy()
+
+        load_more()
+
+    tk.Button(
+        search_frame,
+        text="SEARCH",
+        bg="cyan",
+        fg="#03070d",
+        command=run_search
+    ).pack(side="right")
+
+    # =====================================================
+    # SCROLL LOAD
+    # =====================================================
+    def on_scroll(event):
+        if not started[0]:
+            return
+
+        canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        if canvas.yview()[1] > 0.95:
+            load_more()
+
+    canvas.bind_all("<MouseWheel>", on_scroll)
+
+    # =====================================================
+    # PAGE SYSTEM (FIXED INPUT)
+    # =====================================================
+    page_frame = tk.Frame(tab, bg="#03070d")
+    page_frame.pack(fill="x")
+
+    page_entry = tk.Entry(
+        page_frame,
+        bg="#0a1420",
+        fg="cyan",
+        insertbackground="cyan",
+        width=6,
+        justify="center",
+        relief="flat"
+    )
+    page_entry.pack(side="left", padx=5)
+
+    def go_page():
+        try:
+            p = int(page_entry.get())
+        except:
+            return
+
+        p = max(0, min(max_pages - 1, p))
+
+        current_page[0] = p
+        offset[0] = p * ITEMS_PER_LOAD
+
+        for w in frame.winfo_children():
+            w.destroy()
+
+        load_more()
+        draw_pages()
+
+    tk.Button(
+        page_frame,
+        text="GO",
+        bg="cyan",
+        fg="#03070d",
+        command=go_page
+    ).pack(side="left")
+
+    def draw_pages():
+        for w in page_frame.winfo_children():
+            if w != page_entry:
+                w.destroy()
+
+    # =====================================================
+    # TAB SWITCH (IMPORTANT FIX)
+    # =====================================================
+    def on_tab_change(event):
+        if notebook.index("current") == notebook.index(tab):
+            start_modrinth()
+
+    notebook.bind("<<NotebookTabChanged>>", on_tab_change)
+
+    return tab
